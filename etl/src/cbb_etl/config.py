@@ -103,6 +103,9 @@ class Settings:
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
         env = dict(os.environ if env is None else env)
+        # R2 lives in the Cloudflare account, so CLOUDFLARE_ACCOUNT_ID works too.
+        if not env.get("R2_ACCOUNT_ID"):
+            env["R2_ACCOUNT_ID"] = env.get("CLOUDFLARE_ACCOUNT_ID", "")
         r2_keys = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
         r2 = None
         if all(env.get(k) for k in r2_keys):
@@ -122,7 +125,8 @@ class Settings:
     def require_r2(self) -> R2Settings:
         if self.r2 is None:
             raise RuntimeError(
-                "R2 target needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET"
+                "R2 target needs CLOUDFLARE_ACCOUNT_ID (or R2_ACCOUNT_ID), R2_ACCESS_KEY_ID, "
+                "R2_SECRET_ACCESS_KEY, R2_BUCKET"
             )
         return self.r2
 

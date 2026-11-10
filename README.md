@@ -86,10 +86,11 @@ npm ci
 
 | name | used by | notes |
 |---|---|---|
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | ETL | R2 API token with Object Read & Write on the bucket |
+| `CLOUDFLARE_ACCOUNT_ID` | ETL + worker.yml | one account ID for both the R2 endpoint and Wrangler (`R2_ACCOUNT_ID` is also accepted locally) |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | ETL | R2 API token with Object Read & Write on the bucket |
 | `R2_READ_ACCESS_KEY_ID`, `R2_READ_SECRET_ACCESS_KEY` | ETL -> MotherDuck secret | optional **read-only** token for the lake views (falls back to the write keys, with a warning) |
 | `MOTHERDUCK_TOKEN` | ETL | |
-| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | worker.yml | token needs Workers Scripts:Edit |
+| `CLOUDFLARE_API_TOKEN` | worker.yml | token needs Workers Scripts:Edit |
 
 Add them as GitHub Actions secrets. For local runs, copy `.env.example` to `etl/.env` and
 load it with `set -a; source .env; set +a`. The Worker itself needs no secrets in v1; the
