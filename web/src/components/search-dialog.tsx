@@ -69,7 +69,7 @@ export function SearchDialog({
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        className="h-7 gap-2 px-2 text-xs text-muted-foreground"
+        className="h-7 gap-2 px-1.5 text-xs text-muted-foreground sm:px-2"
         aria-label="Search teams and players"
       >
         <Search className="size-3.5" aria-hidden />

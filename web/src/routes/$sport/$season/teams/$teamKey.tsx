@@ -97,7 +97,7 @@ function TeamPage() {
       </header>
       <CoverageNotice coverage={doc.box?.coverage} />
       {doc.ratings ? <Ratings doc={doc} /> : null}
-      <div className="grid gap-x-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {doc.record ? <Splits doc={doc} /> : null}
         {doc.per_game && doc.shooting ? <VsOpponents doc={doc} /> : null}
       </div>
@@ -138,7 +138,8 @@ function Ratings({ doc }: { doc: TeamDocFull }) {
         value={fmt1(r.pace)}
         rank={doc.ranks.pace}
         field={f}
-        title="Possessions per game"
+        title="Possessions per game (rank 1 = fastest)"
+        neutral
       />
     </div>
   );

@@ -1,5 +1,7 @@
 // Charts (spec §6.3, phase 6). Colors: validated diverging pair --chart-good/--chart-bad
 // (blue/red) and a recessive --chart-context gray for "the rest of the field".
+
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -49,6 +51,19 @@ const toPt = (r: TeamStatsRow): Pt | null =>
         net: r.net_rtg,
       };
 
+/** True when the viewport is at least `px` wide (false during SSR). */
+function useMinWidth(px: number) {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${px}px)`);
+    const on = () => setOk(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [px]);
+  return ok;
+}
+
 /** ORtg (x) vs DRtg (y, reversed so "good defense" is up). Members highlighted. */
 export function RatingScatter({
   field,
@@ -64,6 +79,8 @@ export function RatingScatter({
     .map(toPt)
     .filter((p): p is Pt => p !== null);
   const members = all.filter((p) => memberIds.has(p.id));
+  // Direct labels collide on phones; there the tooltip + legend carry identity.
+  const wide = useMinWidth(640);
   const rest = all.filter((p) => !memberIds.has(p.id));
   if (members.length === 0) return null;
   return (
@@ -131,19 +148,21 @@ export function RatingScatter({
               strokeWidth={2}
               isAnimationActive={false}
             >
-              <LabelList
-                dataKey="abbr"
-                position="top"
-                offset={6}
-                style={{ fill: "var(--foreground)", fontSize: 10 }}
-              />
+              {wide ? (
+                <LabelList
+                  dataKey="abbr"
+                  position="top"
+                  offset={6}
+                  style={{ fill: "var(--foreground)", fontSize: 10 }}
+                />
+              ) : null}
             </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
       </div>
       <figcaption className="mt-1 text-xs text-muted-foreground">
         x: offensive rating (right = better offense) · y: defensive rating, inverted (up = better
-        defense). Teams with at least 5 box-score games.
+        defense). Teams with at least 5 box-score games.{wide ? "" : " Tap a dot for the team."}
       </figcaption>
     </figure>
   );

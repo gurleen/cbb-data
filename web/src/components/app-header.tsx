@@ -38,8 +38,8 @@ export function AppHeader({ prefs }: { prefs: Prefs }) {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-11 max-w-[1440px] items-center gap-3 px-4 lg:px-6">
-        <MobileNav sport={sport} season={activeSeason} />
+      <div className="mx-auto flex h-11 max-w-[1440px] items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
+        <MobileNav sport={sport} season={activeSeason} prefs={prefs} />
         <Link
           to="/"
           className="font-mono text-base font-medium tracking-tight text-foreground hover:no-underline"
@@ -64,8 +64,11 @@ export function AppHeader({ prefs }: { prefs: Prefs }) {
         </nav>
         <div className="ml-auto flex items-center gap-1">
           <SearchDialog sport={sport} season={activeSeason} current={current ?? 0} />
-          <ThemeToggle initial={prefs.theme} />
-          <SettingsMenu initialDensity={prefs.density} />
+          {/* On phones these live in the menu sheet (the header is too narrow at 320px). */}
+          <span className="hidden items-center gap-1 sm:flex">
+            <ThemeToggle initial={prefs.theme} />
+            <SettingsMenu initialDensity={prefs.density} />
+          </span>
         </div>
       </div>
     </header>
@@ -126,7 +129,11 @@ function SeasonPicker({ sport, season }: { sport: Sport; season: number | null }
         })
       }
     >
-      <SelectTrigger size="sm" aria-label="Season" className="h-7 w-[104px] font-mono text-xs">
+      <SelectTrigger
+        size="sm"
+        aria-label="Season"
+        className="h-7 w-[92px] font-mono text-xs sm:w-[104px]"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="max-h-80">
@@ -189,7 +196,15 @@ function SettingsMenu({ initialDensity }: { initialDensity: Density }) {
   );
 }
 
-function MobileNav({ sport, season }: { sport: Sport; season: number | null }) {
+function MobileNav({
+  sport,
+  season,
+  prefs,
+}: {
+  sport: Sport;
+  season: number | null;
+  prefs: Prefs;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -214,7 +229,41 @@ function MobileNav({ sport, season }: { sport: Sport; season: number | null }) {
               </Link>
             ))}
         </nav>
+        <div className="mt-4 border-t pt-3 sm:hidden">
+          <div className="mb-1 px-2 text-xs text-muted-foreground uppercase">Display</div>
+          <div className="flex items-center gap-2 px-2">
+            <ThemeToggle initial={prefs.theme} />
+            <span className="text-sm">Theme</span>
+          </div>
+          <MobileDensity initial={prefs.density} />
+        </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MobileDensity({ initial }: { initial: Density }) {
+  const [density, setDensityState] = useState<Density>(initial);
+  return (
+    <fieldset className="m-0 mt-2 flex items-center gap-2 px-2 text-sm">
+      <legend className="sr-only">Table density</legend>
+      {(["compact", "comfortable"] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          aria-pressed={density === d}
+          onClick={() => {
+            setDensity(d);
+            setDensityState(d);
+          }}
+          className={cn(
+            "rounded-md border px-2 py-1 text-xs capitalize text-muted-foreground",
+            density === d && "bg-surface-hover text-foreground",
+          )}
+        >
+          {d}
+        </button>
+      ))}
+    </fieldset>
   );
 }

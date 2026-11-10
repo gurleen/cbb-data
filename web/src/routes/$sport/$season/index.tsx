@@ -111,7 +111,7 @@ function SeasonOverview() {
         <Stat label="Updated" value={fmtDate(entry.updated_at)} />
       </div>
       <CoverageNotice coverage={entry.box_coverage} />
-      <div className="grid gap-x-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Section
           title="Top 25 by net rating"
           actions={
