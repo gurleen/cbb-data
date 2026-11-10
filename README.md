@@ -170,19 +170,21 @@ npm run lint && npm run typecheck
 ### Frontend (`web/`)
 
 [TanStack Start](https://tanstack.com/start) app, server-rendered in its own Worker
-(`cbb-web`) through `@cloudflare/vite-plugin`. `docs/frontend-spec.md` is the plan; phase
-1 (foundation) is in place:
+(`cbb-web`) through `@cloudflare/vite-plugin`. `docs/frontend-spec.md` is the plan, and
+its §12 lists the implementation notes. What's in place:
 
-* **Styling:** Tailwind v4 and shadcn/ui (`src/components/ui`), with design tokens in
-  `src/styles.css`. IBM Plex Sans/Mono are self-hosted through `@fontsource`.
-* **Theme:** dark by default, with light mode and a compact/comfortable density setting.
-  Both are cookie-based, so SSR renders them with no flash.
-* **App shell:** sport toggle, season picker (both keep you on the same page),
-  breadcrumbs, footer and mobile nav.
-* **Routes:** `/:sport/:season/{conferences,teams,players}`, plus 404s for an unknown
-  sport or season.
-* **Building blocks:** a typed API client (`src/lib/api.ts`), number formatting
-  (`src/lib/format.ts`), and the shared `<StatTable>` (TanStack Table v9).
+* **Pages:** season overview, plus teams, conferences and players (list and detail) for
+  every season. Routes are `/:sport/:season/...`, with canonical slug redirects and
+  404s.
+* **Tables:** the shared `<StatTable>` (TanStack Table v9) has sticky headers and first
+  column, sort state in the URL, optional rank shading, and copy-as-TSV / CSV export.
+* **Charts:** an ORtg vs. DRtg scatter on conference pages and point margin by game on
+  team pages.
+* **Search:** ⌘K or `/` searches teams and players in the current season.
+* **SEO:** `/sitemap.xml`, `/robots.txt`, and per-page titles and descriptions.
+  `/methodology` renders `docs/metrics.md`.
+* **Design:** dark (default) and light themes, plus compact/comfortable density. Both
+  are stored in cookies so SSR renders them with no flash. Fonts are IBM Plex Sans/Mono.
 
 During SSR in production, the app reaches the API through the `API` service binding,
 because a Worker can't fetch another Worker's workers.dev URL on the same account. In the

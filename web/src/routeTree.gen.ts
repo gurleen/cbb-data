@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SportRouteImport } from './routes/$sport'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as MethodologyRouteImport } from './routes/methodology'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SportIndexRouteImport } from './routes/$sport/index'
 import { Route as SportSeasonRouteImport } from './routes/$sport/$season'
 import { Route as SportSeasonIndexRouteImport } from './routes/$sport/$season/index'
@@ -41,6 +43,16 @@ const AboutRoute = AboutRouteImport.update({
 const MethodologyRoute = MethodologyRouteImport.update({
   id: '/methodology',
   path: '/methodology',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SportIndexRoute = SportIndexRouteImport.update({
@@ -97,6 +109,8 @@ export interface FileRoutesByFullPath {
   '/$sport': typeof SportRouteWithChildren
   '/about': typeof AboutRoute
   '/methodology': typeof MethodologyRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$sport/$season': typeof SportSeasonRouteWithChildren
   '/$sport/': typeof SportIndexRoute
   '/$sport/$season/': typeof SportSeasonIndexRoute
@@ -111,6 +125,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/methodology': typeof MethodologyRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$sport': typeof SportIndexRoute
   '/$sport/$season': typeof SportSeasonIndexRoute
   '/$sport/$season/conferences/$conferenceId': typeof SportSeasonConferencesConferenceIdRoute
@@ -126,6 +142,8 @@ export interface FileRoutesById {
   '/$sport': typeof SportRouteWithChildren
   '/about': typeof AboutRoute
   '/methodology': typeof MethodologyRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$sport/$season': typeof SportSeasonRouteWithChildren
   '/$sport/': typeof SportIndexRoute
   '/$sport/$season/': typeof SportSeasonIndexRoute
@@ -143,6 +161,8 @@ export interface FileRouteTypes {
     | '/$sport'
     | '/about'
     | '/methodology'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$sport/$season'
     | '/$sport/'
     | '/$sport/$season/'
@@ -157,6 +177,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/methodology'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$sport'
     | '/$sport/$season'
     | '/$sport/$season/conferences/$conferenceId'
@@ -171,6 +193,8 @@ export interface FileRouteTypes {
     | '/$sport'
     | '/about'
     | '/methodology'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/$sport/$season'
     | '/$sport/'
     | '/$sport/$season/'
@@ -187,6 +211,8 @@ export interface RootRouteChildren {
   SportRoute: typeof SportRouteWithChildren
   AboutRoute: typeof AboutRoute
   MethodologyRoute: typeof MethodologyRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -217,6 +243,20 @@ declare module '@tanstack/react-router' {
       path: '/methodology'
       fullPath: '/methodology'
       preLoaderRoute: typeof MethodologyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$sport/': {
@@ -327,6 +367,8 @@ const rootRouteChildren: RootRouteChildren = {
   SportRoute: SportRouteWithChildren,
   AboutRoute: AboutRoute,
   MethodologyRoute: MethodologyRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

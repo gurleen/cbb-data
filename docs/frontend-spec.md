@@ -4,7 +4,8 @@ This is a public analytics site for D-I men's and women's college basketball, bu
 `cbb-api` Worker. The first release covers list and detail pages for **conferences**,
 **teams** and **players**.
 
-Status: the plan of record. Phases are listed at the end.
+Status: phases 1-6 are implemented (see §12 for where the build deviated from this
+plan). Phases are listed at the end.
 
 ---
 
@@ -92,8 +93,9 @@ cookie, the same way as the theme.
 | `--foreground` | `#e6e8eb` | `#111418` | primary text |
 | `--muted-foreground` | `#8b929c` | `#5b636e` | secondary text, headers |
 | `--primary` | `#3b82f6` | `#2563eb` | links, focus, selected (shadcn's `--accent` is the hover surface) |
-| `--positive` | `#22c55e` | `#15803d` | good values, wins |
-| `--negative` | `#ef4444` | `#b91c1c` | bad values, losses |
+| `--positive` | `#22c55e` | `#15803d` | wins (W/L text) |
+| `--negative` | `#ef4444` | `#b91c1c` | losses (W/L text) |
+| `--chart-good` / `--chart-bad` | `#3b82f6` / `#ef4444` | `#2563eb` / `#dc2626` | charts, rank shading, percentile bars (CVD-validated) |
 
 * **Team colors** are an accent only: a 3 px left border on the entity header and an
   optional chip next to the name. Never use them as text or background, because many
@@ -366,3 +368,34 @@ Root `package.json` with npm workspaces: `worker`, `web`, `packages/*`.
    * ETL player outputs and search index.
    * Player list (virtualized) and player detail, rosters on team pages, and ⌘K search.
 6. **Polish.** Charts, rank shading, CSV export, sitemap, and Open Graph images.
+
+## 12. Implementation notes (deviations from the plan above)
+
+* **Players list: pagination instead of virtualization.** The page shows 100 rows at a
+  time with `?page=`, applied after sorting and filtering over the full list. Three
+  reasons:
+  * It server-renders cheaply: only 100 rows of HTML on Workers.
+  * Every page has a shareable URL.
+  * It needs no extra dependency.
+
+  The default pool is the qualified leaderboard (~2,300 rows, ~195 KB gzipped). The
+  "All" pool (`players-all.json`, ~400 KB) loads only in the browser.
+* **Columnar player leaderboards.** `players.json` and `players-all.json` are stored as
+  `{columns, data}`, which is about half the size of an array of objects. The client
+  expands them with `expandPlayers()`.
+* **Teams list has no per-game/totals toggle.** The leaderboard carries per-game values
+  only, and totals rebuilt from rounded per-game numbers would be inexact. Season totals
+  are on each team page.
+* **Chart and shading colors.** These use a blue/red diverging pair, `--chart-good` and
+  `--chart-bad`, validated for color-vision deficiency in both themes. The original
+  green/red failed for deuteranopia. W/L text keeps `--positive`/`--negative`, because
+  the W/L letter carries the meaning. Stats with no good direction are never shaded:
+  pace and attempt volumes.
+* **Search** uses our own ranking (exact > prefix > word prefix > substring > initials,
+  accent-insensitive) over `search.json`. cmdk only handles keyboard navigation.
+* **SSR data access** goes through the `API` service binding in production. In the
+  browser it goes to the public API URL.
+* **Not done yet:**
+  * Open Graph images. These need an image renderer on Workers, e.g. satori/workers-og.
+  * The comfortable-density default for touch devices.
+  * Conference "streak" and non-conference strength by opponent.

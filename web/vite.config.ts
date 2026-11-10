@@ -6,6 +6,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  // The methodology page imports ../docs/metrics.md (outside this package).
+  server: { fs: { allow: [".."] } },
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr" } }),
     tailwindcss(),

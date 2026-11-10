@@ -138,3 +138,37 @@
 :root[data-density="comfortable"] {
   --row-h: 36px;
 }
+
+/* Rendered markdown (methodology page): compact, table-friendly. */
+.prose-cbb {
+  line-height: 1.6;
+}
+.prose-cbb h2 {
+  @apply mt-6 mb-2 text-lg font-semibold;
+}
+.prose-cbb h3 {
+  @apply mt-4 mb-1 text-base font-semibold;
+}
+.prose-cbb p,
+.prose-cbb ul,
+.prose-cbb ol {
+  @apply mb-3;
+}
+.prose-cbb ul {
+  @apply list-disc pl-5;
+}
+.prose-cbb ol {
+  @apply list-decimal pl-5;
+}
+.prose-cbb code {
+  @apply rounded-sm bg-surface px-1 font-mono text-sm;
+}
+.prose-cbb table {
+  @apply mb-4 w-full border text-sm;
+}
+.prose-cbb th {
+  @apply border-b bg-surface px-2 py-1 text-left text-xs font-medium text-muted-foreground uppercase;
+}
+.prose-cbb td {
+  @apply border-b px-2 py-1 align-top;
+}
