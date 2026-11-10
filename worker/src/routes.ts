@@ -65,6 +65,47 @@ v1.get("/:sport/:season/teams/:teamId", async (c) => {
   return serve(c, KEYS.team(sport, season, teamId), season, `team ${teamId} in ${season}`);
 });
 
+// -- simple passthrough routes (precomputed objects) ----------------------------------------
+const ID = /^\d{1,12}$/;
+
+/** Season-scoped object: `v1/{sport}/{season}/{suffix}`; `:id` params must be numeric. */
+function seasonObject(path: string, suffix: (p: Record<string, string>) => string, what: string) {
+  v1.get(path, async (c) => {
+    const bad = checkParams(c);
+    if (bad) return bad;
+    const p = c.req.param() as Record<string, string>;
+    for (const [k, v] of Object.entries(p)) {
+      if (k.endsWith("Id") && !ID.test(v)) return jsonError(c, 400, `${k} must be numeric`);
+    }
+    return serve(c, `v1/${p.sport}/${p.season}/${suffix(p)}`, p.season, what);
+  });
+}
+
+seasonObject("/:sport/:season/conferences", () => "conferences.json", "conferences");
+seasonObject(
+  "/:sport/:season/conferences/:conferenceId",
+  (p) => `conferences/${p.conferenceId}.json`,
+  "conference",
+);
+seasonObject(
+  "/:sport/:season/teams/:teamId/games",
+  (p) => `teams/${p.teamId}/games.json`,
+  "team games",
+);
+seasonObject("/:sport/:season/players", () => "players.json", "players");
+seasonObject("/:sport/:season/players-all", () => "players-all.json", "players");
+seasonObject("/:sport/:season/players/:playerId", (p) => `players/${p.playerId}.json`, "player");
+seasonObject("/:sport/:season/search", () => "search.json", "search index");
+
+// Season-independent player career.
+v1.get("/:sport/players/:playerId", async (c) => {
+  const bad = checkParams(c);
+  if (bad) return bad;
+  const { sport, playerId } = c.req.param();
+  if (!ID.test(playerId)) return jsonError(c, 400, "playerId must be numeric");
+  return serve(c, `v1/${sport}/players/${playerId}.json`, null, `player ${playerId}`);
+});
+
 v1.get("/:sport/:season/team-stats", async (c) => {
   const bad = checkParams(c);
   if (bad) return bad;

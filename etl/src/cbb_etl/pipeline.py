@@ -31,6 +31,7 @@ from .load_motherduck import GB, MotherDuckLoader
 from .load_r2 import LocalStore, Publisher, R2Store
 from .seasons import current_season, parse_seasons
 from .transform import SeasonBuild, SeasonNotStarted, build_season, transform_fingerprint
+from .transform.careers import build_careers
 
 logger = log.get(__name__)
 
@@ -150,9 +151,12 @@ def run(opts: RunOptions, settings: Settings | None = None) -> int:
             builds[(sport, season)] = b
 
     staging = settings.cache_dir.parent / "staging"
+    exported: dict[tuple[str, int], dict[str, Path]] = {}
 
-    def derived_path(b: SeasonBuild) -> Path:
-        return b.export_derived(staging / b.sport / str(b.season) / f"{DERIVED_TABLE}.parquet")
+    def derived_paths(b: SeasonBuild) -> dict[str, Path]:
+        if (b.sport, b.season) not in exported:
+            exported[(b.sport, b.season)] = b.export_derived(staging / b.sport / str(b.season))
+        return exported[(b.sport, b.season)]
 
     # 2. parquet lake (upstream files copied as-is + derived table)
     if want_lake:
@@ -167,17 +171,23 @@ def run(opts: RunOptions, settings: Settings | None = None) -> int:
                 publisher.sync_file(key, client.fetch(asset), asset.fingerprint)
             b = builds.get((sport, season))
             if b is not None and b.md_needed:
-                publisher.sync_file(
-                    keys.lake_key(sport, DERIVED_TABLE, season),
-                    derived_path(b),
-                    _digest(fingerprints[(sport, season)]),
-                )
+                for table, path in derived_paths(b).items():
+                    publisher.sync_file(
+                        keys.lake_key(sport, table, season),
+                        path,
+                        _digest(fingerprints[(sport, season)]),
+                    )
+
+    # 2b. player careers (season-independent), from every season's player_season_stats
+    careers: dict = {}
+    if want_r2:
+        careers = _careers(builds, publisher, derived_paths, staging, want_lake)
 
     # 3. API JSON objects, then the manifest (last)
     if publisher:
         r2_builds = [b for b in builds.values() if b.r2_needed]
         if r2_builds:
-            publisher.publish(r2_builds, fingerprints, upstream)
+            publisher.publish(r2_builds, fingerprints, upstream, extra_docs=careers)
         elif publisher.dirty:
             publisher.save()
         else:
@@ -202,7 +212,7 @@ def run(opts: RunOptions, settings: Settings | None = None) -> int:
                     fingerprints,
                     table_plan,
                     table_datasets,
-                    derived_path,
+                    derived_paths,
                     opts.force,
                 )
             logger.info("motherduck done", extra={"estimated_storage": loader.storage_report()})
@@ -233,8 +243,45 @@ def _refresh_views(
             loader.refresh_view(sport, table, f"{base}/{sport}/{table}/*/*.parquet")
 
 
+def _careers(builds, publisher, derived_paths, staging: Path, want_lake: bool) -> dict:
+    out: dict = {}
+    for sport in sorted({b.sport for b in builds.values()}):
+        run = [b for (sp, _), b in builds.items() if sp == sport and b.r2_needed and b.has_players]
+        if not run:
+            continue
+        ids = {
+            r[0]
+            for b in run
+            for r in b.con.execute(
+                "SELECT athlete_id FROM player_season_stats WHERE division_i"
+            ).fetchall()
+        }
+        files = {b.season: derived_paths(b)["player_season_stats"] for b in run}
+        if want_lake:  # other seasons come from the lake
+            prefix = keys.lake_table_prefix(sport, "player_season_stats")
+            for key in publisher.keys_with_prefix(prefix):
+                season = int(key.split("season=")[1].split("/")[0])
+                if season in files:
+                    continue
+                raw = publisher.store.get(key)
+                if raw is None:
+                    continue
+                path = staging / sport / str(season) / "lake_player_season_stats.parquet"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+                files[season] = path
+        else:
+            logger.warning("careers built from this run's seasons only (lake target off)")
+        docs = build_careers(sport, list(files.values()), ids)
+        logger.info(
+            "careers built", extra={"sport": sport, "players": len(docs), "seasons": len(files)}
+        )
+        out.update(docs)
+    return out
+
+
 def _load_tables(
-    loader, client, builds, fingerprints, table_plan, table_datasets, derived_path, force: bool
+    loader, client, builds, fingerprints, table_plan, table_datasets, derived_paths, force: bool
 ) -> None:
     for sport, season in table_plan:
         for ds in table_datasets:
@@ -246,11 +293,7 @@ def _load_tables(
             loader.load(sport, season, ds, client.fetch(asset), asset.fingerprint, force=True)
         b = builds.get((sport, season))
         if b is not None and b.md_needed:
-            loader.load(
-                sport,
-                season,
-                DERIVED_TABLE,
-                derived_path(b),
-                _digest(fingerprints[(sport, season)]),
-                force=True,
-            )
+            for table, path in derived_paths(b).items():
+                loader.load(
+                    sport, season, table, path, _digest(fingerprints[(sport, season)]), force=True
+                )

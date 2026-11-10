@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 import shutil
 import time
 from collections.abc import Iterable
@@ -81,7 +82,7 @@ class R2Store:
             aws_access_key_id=settings.access_key_id,
             aws_secret_access_key=settings.secret_access_key,
             region_name="auto",
-            config=Config(retries={"max_attempts": 5, "mode": "standard"}, max_pool_connections=32),
+            config=Config(retries={"max_attempts": 5, "mode": "standard"}, max_pool_connections=64),
         )
 
     def get(self, key: str) -> bytes | None:
@@ -147,6 +148,22 @@ class Manifest:
 
 # -- publisher ------------------------------------------------------------------------------
 
+_SEASON_KEY = re.compile(r"^v1/(mbb|wbb)/(\d{4})/")
+_CAREER_KEY = re.compile(r"^v1/(mbb|wbb)/players/")
+
+
+def shard_of(key: str) -> str | None:
+    """Hash-shard object for a key, or None if it lives in the main manifest.
+
+    Per-season objects (thousands per season once players exist) and per-player career
+    objects are tracked in shard files so the main manifest stays small and a run only
+    loads the shards it touches."""
+    if m := _SEASON_KEY.match(key):
+        return keys.hashes_key(m.group(1), int(m.group(2)))
+    if m := _CAREER_KEY.match(key):
+        return f"v1/{m.group(1)}/players/_hashes.json"
+    return None
+
 
 @dataclass
 class PublishStats:
@@ -165,14 +182,59 @@ class Publisher:
         self.label = dry_run_label
         self.manifest = Manifest.load(store)
         self.dirty = False
+        self._shards: dict[str, dict[str, str]] = {}  # shard key -> {object key: sha}
+        self._dirty_shards: set[str] = set()
         if self.manifest.encoder != encoder.name:
             logger.warning(
                 "encoder changed; all objects will be re-uploaded",
                 extra={"old": self.manifest.encoder, "new": encoder.name},
             )
-            self.manifest.objects = {}
+            self.manifest.objects = {
+                k: v for k, v in self.manifest.objects.items() if "source" in v
+            }
             self.manifest.encoder = encoder.name
+            self._reset_shards = True
+        else:
+            self._reset_shards = False
 
+    # -- shards ------------------------------------------------------------------------------
+    def _shard(self, shard_key: str) -> dict[str, str]:
+        if shard_key not in self._shards:
+            shard: dict[str, str] = {}
+            raw = None if self._reset_shards else self.store.get(shard_key)
+            if raw is not None:
+                shard = json.loads(gzip.decompress(raw) if raw[:2] == b"\x1f\x8b" else raw)
+            # one-time migration: season objects used to live in the main manifest
+            for k in [k for k in self.manifest.objects if shard_of(k) == shard_key]:
+                v = self.manifest.objects.pop(k)
+                if "sha256" in v:
+                    shard.setdefault(k, v["sha256"][:32])
+                self.dirty = True
+                self._dirty_shards.add(shard_key)
+            self._shards[shard_key] = shard
+        return self._shards[shard_key]
+
+    def _known_sha(self, key: str) -> str | None:
+        sk = shard_of(key)
+        if sk is None:
+            v = self.manifest.objects.get(key)
+            return v.get("sha256", "")[:32] if v else None
+        return self._shard(sk).get(key)
+
+    def _record(self, key: str, enc: Encoded, now: str) -> None:
+        sk = shard_of(key)
+        if sk is None:
+            self.manifest.objects[key] = {
+                "sha256": enc.sha256,
+                "bytes": len(enc.body),
+                "raw_bytes": enc.raw_bytes,
+                "updated_at": now,
+            }
+        else:
+            self._shard(sk)[key] = enc.sha256[:32]
+            self._dirty_shards.add(sk)
+
+    # -- lake files (main manifest) ------------------------------------------------------
     def file_unchanged(self, key: str, fingerprint: str) -> bool:
         return self.manifest.objects.get(key, {}).get("source") == fingerprint
 
@@ -200,6 +262,10 @@ class Publisher:
         return sorted(k for k in self.manifest.objects if k.startswith(prefix))
 
     def save(self) -> None:
+        """Write dirty shards, then the main manifest (last)."""
+        for sk in sorted(self._dirty_shards):
+            self.store.put(sk, self.encoder.encode(self._shards[sk]))
+        self._dirty_shards.clear()
         self.manifest.updated_at = _now()
         self.store.put(keys.MANIFEST_KEY, self.encoder.encode(self.manifest.to_json()))
         self.dirty = False
@@ -207,46 +273,55 @@ class Publisher:
     def season_unchanged(self, sport: str, season: int, fingerprints: dict[str, str]) -> bool:
         return self.manifest.sources.get(f"{sport}/{season}") == fingerprints
 
+    # -- publish -------------------------------------------------------------------------
     def publish(
         self,
         builds: Iterable[Any],
         fingerprints: dict[tuple[str, int], dict[str, str]],
         upstream: dict[str, dict[str, str | None]],
+        extra_docs: dict[str, Any] | None = None,
     ) -> PublishStats:
-        """Upload changed objects for all builds, then seasons.json, then the manifest."""
+        """Upload changed objects for all builds (+ `extra_docs`, e.g. careers), then
+        seasons.json, then the hash shards and the manifest."""
         stats = PublishStats()
         now = _now()
         builds = list(builds)
         pending: list[tuple[str, Encoded]] = []
         stale: list[str] = []
 
-        for b in builds:
-            prefix = keys.season_prefix(b.sport, b.season)
-            for key, doc in b.documents.items():
-                enc = self.encoder.encode(doc)
-                prev = self.manifest.objects.get(key)
-                if prev and prev.get("sha256") == enc.sha256:
-                    stats.skipped += 1
-                else:
-                    pending.append((key, enc))
-            stale += [
-                k for k in self.manifest.objects if k.startswith(prefix) and k not in b.documents
-            ]
+        def consider(key: str, doc: Any) -> None:
+            enc = self.encoder.encode(doc)
+            if self._known_sha(key) == enc.sha256[:32]:
+                stats.skipped += 1
+            else:
+                pending.append((key, enc))
 
-        # Upload season objects (parallel), then remove stale ones.
+        for b in builds:
+            for key, doc in b.documents.items():
+                consider(key, doc)
+            shard = self._shard(keys.hashes_key(b.sport, b.season))
+            stale += [k for k in shard if k not in b.documents]
+        for key, doc in (extra_docs or {}).items():
+            consider(key, doc)
+
+        # Upload objects (parallel), then remove stale ones.
         self._upload(pending, now, stats)
         if stale:
             self.store.delete(stale)
             for k in stale:
-                self.manifest.objects.pop(k, None)
+                sk = shard_of(k)
+                if sk:
+                    self._shard(sk).pop(k, None)
+                    self._dirty_shards.add(sk)
             stats.deleted += len(stale)
 
         # Season summaries + sources, then seasons.json per sport.
+        changed_prefixes = {m.group(0) for k, _ in pending if (m := _SEASON_KEY.match(k))}
         touched_sports = set()
         for b in builds:
             entry = self.manifest.seasons.setdefault(b.sport, {})
             prev = entry.get(str(b.season), {})
-            changed = any(k.startswith(keys.season_prefix(b.sport, b.season)) for k, _ in pending)
+            changed = keys.season_prefix(b.sport, b.season) in changed_prefixes
             summary = dict(b.summary)
             summary["updated_at"] = now if changed or not prev else prev.get("updated_at", now)
             entry[str(b.season)] = summary
@@ -256,11 +331,7 @@ class Publisher:
             (keys.seasons_key(s), self.encoder.encode(self.seasons_doc(s)))
             for s in sorted(touched_sports)
         ]
-        seasons_docs = [
-            (k, e)
-            for k, e in seasons_docs
-            if self.manifest.objects.get(k, {}).get("sha256") != e.sha256
-        ]
+        seasons_docs = [(k, e) for k, e in seasons_docs if self._known_sha(k) != e.sha256[:32]]
         self._upload(seasons_docs, now, stats)
 
         for sport, ts in upstream.items():
@@ -283,14 +354,13 @@ class Publisher:
         def put(item: tuple[str, Encoded]) -> None:
             self.store.put(*item)
 
-        with ThreadPoolExecutor(max_workers=16) as pool:
+        t0 = time.monotonic()
+        with ThreadPoolExecutor(max_workers=32) as pool:
             list(pool.map(put, items))
         for key, enc in items:
-            self.manifest.objects[key] = {
-                "sha256": enc.sha256,
-                "bytes": len(enc.body),
-                "raw_bytes": enc.raw_bytes,
-                "updated_at": now,
-            }
+            self._record(key, enc, now)
             stats.uploaded += 1
             stats.bytes_uploaded += len(enc.body)
+        logger.info(
+            "uploaded batch", extra={"objects": len(items), "secs": round(time.monotonic() - t0, 1)}
+        )

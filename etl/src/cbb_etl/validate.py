@@ -18,6 +18,8 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
     "schedules": (
         "game_id",
         "season",
+        "season_type",
+        "status_type_name",
         "status_type_completed",
         "game_date_time",
         "neutral_site",
@@ -76,6 +78,35 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "fouls",
     ),
     "standings": ("team_id", "group_id", "group_name", "group_short_name"),
+    "player_boxscores": (
+        "game_id",
+        "game_date_time",
+        "athlete_id",
+        "athlete_display_name",
+        "team_id",
+        "opponent_team_id",
+        "minutes",
+        "points",
+        "field_goals_made",
+        "field_goals_attempted",
+        "three_point_field_goals_made",
+        "three_point_field_goals_attempted",
+        "free_throws_made",
+        "free_throws_attempted",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "fouls",
+        "starter",
+        "did_not_play",
+        "home_away",
+        "team_score",
+        "opponent_team_score",
+    ),
 }
 
 
@@ -198,6 +229,50 @@ def validate_season(
     if d1_no_conf_name:
         warnings.append(f"{d1_no_conf_name} Division I teams without a conference name")
 
+    if errors:
+        raise ValidationError(f"{context}: " + "; ".join(errors))
+    for w in warnings:
+        logger.warning(w, extra={"context": context})
+    return warnings
+
+
+def validate_players(con: duckdb.DuckDBPyConnection, context: str) -> list[str]:
+    """Checks on `player_season_stats` / `player_games`. Returns warnings."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    (n, dups, bad_made, too_many_min, over_games) = _one(
+        con,
+        """
+        SELECT count(*), count(*) - count(DISTINCT athlete_id),
+               count(*) FILTER (WHERE fgm > fga OR fg3m > fg3a OR ftm > fta OR fg3m > fgm),
+               count(*) FILTER (WHERE g >= 3 AND mpg > 50),
+               count(*) FILTER (WHERE g > 45)
+        FROM player_season_stats""",
+    )
+    if n == 0:
+        warnings.append("player_season_stats has 0 rows (no player box scores)")
+    if dups:
+        errors.append(f"player_season_stats has {dups} duplicate athlete_id rows")
+    # Upstream player rows occasionally have typos (e.g. MBB 2026: 2 FTM on 0 FTA for a
+    # non-D-I player with 0 minutes). A few are logged; many means a broken file.
+    for label, k in (
+        ("made > attempted", bad_made),
+        ("mpg > 50", too_many_min),
+        ("more than 45 games", over_games),
+    ):
+        if k > 5:
+            errors.append(f"{k} players with {label}")
+        elif k:
+            warnings.append(f"{k} players with {label} (upstream data error; kept)")
+    (mismatch,) = _one(
+        con,
+        """
+        SELECT count(*) FROM (
+            SELECT game_id, team_id, sum(pts) AS p, any_value(team_pts) AS t
+            FROM player_games GROUP BY 1, 2) WHERE p <> t""",
+    )
+    if mismatch:
+        warnings.append(f"{mismatch} team-games where player points != team score")
     if errors:
         raise ValidationError(f"{context}: " + "; ".join(errors))
     for w in warnings:

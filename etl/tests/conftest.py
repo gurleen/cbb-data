@@ -17,6 +17,8 @@ import pytest
 SCHEDULE_TYPES = {
     "game_id": "INTEGER",
     "season": "INTEGER",
+    "season_type": "INTEGER",
+    "status_type_name": "VARCHAR",
     "status_type_completed": "BOOLEAN",
     "game_date_time": "TIMESTAMPTZ",
     "neutral_site": "BOOLEAN",
@@ -139,6 +141,8 @@ def make_fixture(tmp: Path, box: dict | None = None, games: list | None = None):
             {
                 "game_id": gid,
                 "season": 2026,
+                "season_type": 2,
+                "status_type_name": "STATUS_FINAL" if done else "STATUS_CANCELED",
                 "status_type_completed": done,
                 "game_date_time": ts,
                 "neutral_site": False,
@@ -186,3 +190,60 @@ def make_fixture(tmp: Path, box: dict | None = None, games: list | None = None):
 @pytest.fixture
 def fixture_paths(tmp_path: Path):
     return make_fixture(tmp_path)
+
+
+# -- players -----------------------------------------------------------------------------
+PLAYER_TYPES = {
+    "game_id": "INTEGER", "season": "INTEGER", "game_date_time": "TIMESTAMPTZ",
+    "athlete_id": "INTEGER", "athlete_display_name": "VARCHAR",
+    "athlete_short_name": "VARCHAR", "athlete_jersey": "VARCHAR",
+    "athlete_position_abbreviation": "VARCHAR", "athlete_headshot_href": "VARCHAR",
+    "team_id": "INTEGER", "opponent_team_id": "INTEGER", "home_away": "VARCHAR",
+    "team_score": "INTEGER", "opponent_team_score": "INTEGER",
+    "minutes": "DOUBLE", "points": "INTEGER",
+    "field_goals_made": "INTEGER", "field_goals_attempted": "INTEGER",
+    "three_point_field_goals_made": "INTEGER", "three_point_field_goals_attempted": "INTEGER",
+    "free_throws_made": "INTEGER", "free_throws_attempted": "INTEGER",
+    "offensive_rebounds": "INTEGER", "defensive_rebounds": "INTEGER", "rebounds": "INTEGER",
+    "assists": "INTEGER", "steals": "INTEGER", "blocks": "INTEGER", "turnovers": "INTEGER",
+    "fouls": "INTEGER", "starter": "BOOLEAN", "did_not_play": "BOOLEAN",
+}  # fmt: skip
+P_STATS = ("minutes", "points", "field_goals_made", "field_goals_attempted",
+           "three_point_field_goals_made", "three_point_field_goals_attempted",
+           "free_throws_made", "free_throws_attempted", "offensive_rebounds",
+           "defensive_rebounds", "rebounds", "assists", "steals", "blocks", "turnovers",
+           "fouls")  # fmt: skip
+
+# (game, athlete, name, team, starter, dnp, stats as in P_STATS)
+PLAYER_ROWS = [
+    (101, 10, "Ada Alpha", 1, True, False, (30, 20, 8, 15, 2, 5, 2, 2, 1, 5, 6, 3, 1, 0, 2, 2)),
+    (101, 20, "Bea Beta", 2, True, False, (32, 18, 7, 16, 1, 4, 3, 4, 2, 4, 6, 2, 1, 1, 3, 3)),
+    (101, 21, "Cy Beta", 2, False, True, (None,) * 16),
+    (102, 20, "Bea Beta", 2, True, False, (28, 22, 9, 14, 2, 5, 2, 2, 1, 6, 7, 4, 2, 0, 2, 1)),
+    (102, 21, "Cy Beta", 2, False, False, (12, 4, 2, 5, 0, 1, 0, 0, 0, 2, 2, 1, 0, 0, 1, 2)),
+]  # fmt: skip
+
+
+def make_player_box(tmp: Path) -> Path:
+    games = {g[0]: g for g in GAMES}
+    rows = []
+    for gid, aid, name, tid, starter, dnp, stats in PLAYER_ROWS:
+        _, h, a, hs, as_, _, _, ts = games[gid]
+        home = tid == h
+        rows.append({
+            "game_id": gid, "season": 2026, "game_date_time": ts, "athlete_id": aid,
+            "athlete_display_name": name, "athlete_short_name": name.split()[0],
+            "athlete_jersey": str(aid), "athlete_position_abbreviation": "G",
+            "athlete_headshot_href": None, "team_id": tid, "opponent_team_id": a if home else h,
+            "home_away": "home" if home else "away", "team_score": hs if home else as_,
+            "opponent_team_score": as_ if home else hs, "starter": starter, "did_not_play": dnp,
+            **dict(zip(P_STATS, stats, strict=True)),
+        })  # fmt: skip
+    return _write(tmp / "player_box.parquet", PLAYER_TYPES, rows)
+
+
+@pytest.fixture
+def fixture_with_players(tmp_path: Path):
+    paths = make_fixture(tmp_path)
+    paths["player_boxscores"] = make_player_box(tmp_path)
+    return paths

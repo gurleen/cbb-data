@@ -52,9 +52,18 @@ v1/{sport}/seasons.json                         seasons available, with D-I team
 v1/{sport}/{season}/teams.json                  every team in the season (D-I flag, conference, colors, logo)
 v1/{sport}/{season}/teams/{team_id}.json        metadata + record, totals, per-game, shooting, ratings
 v1/{sport}/{season}/team-stats.json             one row per D-I team (leaderboard)
+v1/{sport}/{season}/teams/{team_id}/games.json  team game log (schedule + box line per game)
+v1/{sport}/{season}/conferences.json            conference summaries (ratings, non-con record)
+v1/{sport}/{season}/conferences/{id}.json       conference standings + member ratings
+v1/{sport}/{season}/players.json                qualified D-I players (columnar: columns + data)
+v1/{sport}/{season}/players-all.json            every D-I player with a game (columnar)
+v1/{sport}/{season}/players/{player_id}.json    player season: bio, line, ranks, game log
+v1/{sport}/{season}/search.json                 compact team + player search index
+v1/{sport}/players/{player_id}.json             player career (all seasons)
+v1/{sport}/{season}/_hashes.json                internal: content hashes for the season (not served)
 parquet/v1/{sport}/{table}/season={season}/data.parquet
-    tables: schedules, team_boxscores, player_boxscores, rosters, standings,
-            team_season_stats (derived), pbp (opt-in)
+    tables: schedules, team_boxscores, player_boxscores, rosters, standings, pbp (opt-in),
+            and derived team_season_stats, conference_stats, player_season_stats
 ```
 
 JSON objects are stored with `Content-Type: application/json` and `Content-Encoding: gzip`.
@@ -250,6 +259,12 @@ from overlapping.
 | `GET /v1/{sport}/{season}/teams` | |
 | `GET /v1/{sport}/{season}/teams/{teamId}` | |
 | `GET /v1/{sport}/{season}/team-stats` | `?sort=-net_rtg` (a leading `-` means descending; nulls always last), `?limit=1..1000` |
+| `GET /v1/{sport}/{season}/teams/{teamId}/games` | team game log |
+| `GET /v1/{sport}/{season}/conferences[/{id}]` | |
+| `GET /v1/{sport}/{season}/players`, `/players-all` | columnar player leaderboards |
+| `GET /v1/{sport}/{season}/players/{playerId}` | player season |
+| `GET /v1/{sport}/players/{playerId}` | player career |
+| `GET /v1/{sport}/{season}/search` | search index |
 
 * `sport` must be `mbb` or `wbb`, and `season` a 4-digit year. Otherwise you get a JSON
   `400`. Unknown objects or routes return a JSON `404`.

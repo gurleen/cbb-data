@@ -83,7 +83,11 @@ def test_documents(built):
     assert set(docs) == {
         keys.teams_key("mbb", 2026),
         keys.team_stats_key("mbb", 2026),
+        keys.conferences_key("mbb", 2026),
+        keys.conference_key("mbb", 2026, 10),
+        keys.search_key("mbb", 2026),
         *(keys.team_key("mbb", 2026, t) for t in (1, 2, 3)),
+        *(keys.team_games_key("mbb", 2026, t) for t in (1, 2, 3)),
     }
     board = docs[keys.team_stats_key("mbb", 2026)]
     assert [r["team_id"] for r in board["rows"]] == [1, 2]  # D-I only
@@ -92,3 +96,26 @@ def test_documents(built):
     assert beta["team"]["color"] == "#445566"
     assert beta["team"]["conference"] == {"id": 10, "name": "Test Conference", "short_name": "TC"}
     assert built.summary["games"] == 3
+
+
+def test_ranks_conferences_and_game_logs(built):
+    docs = built.documents
+    beta = docs[keys.team_key("mbb", 2026, 2)]
+    alpha = docs[keys.team_key("mbb", 2026, 1)]
+    # D-I field = Alpha + Beta (Gamma is not D-I). Beta has the better net rating.
+    assert beta["rank_field"] == 2
+    assert beta["ranks"]["net_rtg"] == 1 and alpha["ranks"]["net_rtg"] == 2
+    # DRtg: lower is better -> Alpha (85.6) ranks ahead of Beta (87.2)
+    assert alpha["ranks"]["drtg"] == 1 and beta["ranks"]["drtg"] == 2
+    conf = docs[keys.conferences_key("mbb", 2026)]["conferences"][0]
+    assert conf["id"] == 10 and conf["teams"] == 2
+    assert (conf["nonconf_wins"], conf["nonconf_losses"]) == (0, 0)  # Gamma isn't D-I
+    detail = docs[keys.conference_key("mbb", 2026, 10)]
+    assert [t["team_id"] for t in detail["teams"]] == [1, 2]  # Alpha 1-0 in conference
+    games = docs[keys.team_games_key("mbb", 2026, 1)]["games"]
+    assert [g["game_id"] for g in games] == [101, 103, 104]
+    g101, g103, g104 = games
+    assert (g101["result"], g101["pts"], g101["opp_pts"], g101["site"]) == ("W", 70, 60, "home")
+    assert g101["box"]["poss"] == 70.1 and g101["box"]["ortg"] == 99.8
+    assert g103["box"] is None and g103["site"] == "away"
+    assert g104["completed"] is False and g104["result"] is None and g104["pts"] is None

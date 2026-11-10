@@ -70,11 +70,14 @@ SPORT_CONFIG: dict[str, Sport] = {
 }
 
 # Datasets needed to build the R2 outputs.
-R2_SOURCE_DATASETS = ("schedules", "team_boxscores", "standings")
+R2_SOURCE_DATASETS = ("schedules", "team_boxscores", "standings", "player_boxscores", "rosters")
 # Base tables copied to the R2 parquet lake and exposed in MotherDuck (pbp is opt-in).
 LAKE_DATASETS = ("schedules", "team_boxscores", "player_boxscores", "rosters", "standings")
 DERIVED_TABLE = "team_season_stats"
-OPTIONAL_DATASETS = frozenset({"standings", "rosters"})  # may be missing for some seasons
+DERIVED_TABLES = ("team_season_stats", "conference_stats", "player_season_stats")
+OPTIONAL_DATASETS = frozenset(
+    {"standings", "rosters", "player_boxscores"}
+)  # may be missing for some seasons
 
 
 @dataclass(frozen=True)

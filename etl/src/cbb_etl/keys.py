@@ -51,3 +51,44 @@ def lake_key(sport: str, table: str, season: int) -> str:
 
 def lake_table_prefix(sport: str, table: str) -> str:
     return f"{LAKE_PREFIX}/{_sport(sport)}/{table}/"
+
+
+# -- phase 2-5 outputs ------------------------------------------------------------------------
+def conferences_key(sport: str, season: int) -> str:
+    return f"{season_prefix(sport, season)}conferences.json"
+
+
+def conference_key(sport: str, season: int, conference_id: int) -> str:
+    return f"{season_prefix(sport, season)}conferences/{int(conference_id)}.json"
+
+
+def team_games_key(sport: str, season: int, team_id: int) -> str:
+    return f"{season_prefix(sport, season)}teams/{int(team_id)}/games.json"
+
+
+def players_key(sport: str, season: int) -> str:
+    """Leaderboard of qualified D-I players."""
+    return f"{season_prefix(sport, season)}players.json"
+
+
+def players_all_key(sport: str, season: int) -> str:
+    """Every D-I player with at least one game."""
+    return f"{season_prefix(sport, season)}players-all.json"
+
+
+def player_key(sport: str, season: int, player_id: int) -> str:
+    return f"{season_prefix(sport, season)}players/{int(player_id)}.json"
+
+
+def search_key(sport: str, season: int) -> str:
+    return f"{season_prefix(sport, season)}search.json"
+
+
+def career_key(sport: str, player_id: int) -> str:
+    """Season-independent: every season a player appears in."""
+    return f"{VERSION}/{_sport(sport)}/players/{int(player_id)}.json"
+
+
+def hashes_key(sport: str, season: int) -> str:
+    """Per-season shard of object content hashes (internal; never served)."""
+    return f"{season_prefix(sport, season)}_hashes.json"

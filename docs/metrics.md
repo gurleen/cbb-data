@@ -92,6 +92,44 @@ Game 102 possessions: Beta `62 - 12 + 10 + 0.475*12 = 65.7`, Gamma `55 - 9 + 16 
   ORtg **101.8**, DRtg **87.2**, Net **14.5**, pace **68.8**. FG% `52/120 = .433`, 3P%
   `16/47 = .340`, FT% `20/26 = .769`.
 
+## D-I ranks
+
+Team pages carry `ranks` (and `rank_field`, the field size) for win %, ratings, pace,
+scoring, shooting and per-game stats. Ranks cover D-I teams with at least one box game,
+use competition ranking (1, 2, 2, 4), and are reversed for stats where lower is better
+(DRtg, opponent PPG, opponent FG%/3P%, turnovers).
+
+## Conferences (`conference_stats`)
+
+* `avg_ortg`, `avg_drtg`, `avg_net_rtg`, `avg_pace` are the plain mean over the
+  conference's D-I teams that have box games. They are not possession-weighted.
+* The non-conference record counts games against D-I teams from a different conference.
+  Independents count as one group.
+* `rank` orders conferences by `avg_net_rtg`.
+
+## Players (`player_season_stats`)
+
+Built from `player_boxscores`, keeping only rows for games that count in the record and
+excluding `did_not_play` rows. A player's team is the team they played the most games
+for.
+
+| metric | formula |
+|---|---|
+| `mpg`, `ppg`, `rpg`, `apg`, `spg`, `bpg`, `topg` | total / games played |
+| `fg_pct`, `fg3_pct`, `ft_pct` | makes / attempts |
+| `efg_pct` | (FGM + 0.5 * 3PM) / FGA |
+| `ts_pct` | PTS / (2 * (FGA + 0.44 * FTA)) |
+| `usg_pct` | 100 * (FGA + 0.44 * FTA + TOV) * (TmMIN / 5) / (MIN * (TmFGA + 0.44 * TmFTA + TmTOV)), using team totals from the games the player played |
+| `min_pct` | player minutes / team minutes (sum of the team's player-minutes / 5) |
+
+**Qualified** players (leaderboard `players.json`, player ranks) played at least 40% of
+their team's minutes. Early seasons have no minutes data; there, a player qualifies by
+playing at least 50% of the team's games. Within the qualified pool:
+* 3P% is ranked only for players with at least 1.0 3PA per game.
+* FT% is ranked only for players with at least 1.0 FTA per game.
+
+`players-all.json` has every D-I player with at least one game.
+
 ## Cross-check
 
 MBB `team_season_stats` (ESPN's own season stats) could be used to spot-check totals. We

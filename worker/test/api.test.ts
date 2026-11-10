@@ -33,6 +33,49 @@ beforeEach(async () => {
   }
 });
 
+describe("phase 2-5 passthrough routes", () => {
+  beforeEach(async () => {
+    const base = `v1/mbb/${PAST}`;
+    await put(`${base}/conferences.json`, { conferences: [{ id: 2 }] });
+    await put(`${base}/conferences/2.json`, { conference: { id: 2 } });
+    await put(`${base}/teams/1/games.json`, { games: [{ game_id: 9 }] });
+    await put(`${base}/players.json`, { columns: ["player_id"], data: [[7]] });
+    await put(`${base}/players-all.json`, { columns: ["player_id"], data: [[7], [8]] });
+    await put(`${base}/players/7.json`, { player: { player_id: 7 } });
+    await put(`${base}/search.json`, { teams: [], players: [] });
+    await put("v1/mbb/players/7.json", { player_id: 7, seasons: [] });
+  });
+
+  it.each([
+    ["/conferences", { conferences: [{ id: 2 }] }],
+    ["/conferences/2", { conference: { id: 2 } }],
+    ["/teams/1/games", { games: [{ game_id: 9 }] }],
+    ["/players", { columns: ["player_id"], data: [[7]] }],
+    ["/players-all", { columns: ["player_id"], data: [[7], [8]] }],
+    ["/players/7", { player: { player_id: 7 } }],
+    ["/search", { teams: [], players: [] }],
+  ])("serves %s", async (suffix, body) => {
+    const res = await get(`/v1/mbb/${PAST}${suffix}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(body);
+    expect(res.headers.get("Cache-Control")).toContain("immutable");
+  });
+
+  it("serves careers with a short TTL", async () => {
+    const res = await get("/v1/mbb/players/7");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toContain("max-age=600");
+  });
+
+  it("validates ids and 404s on missing objects", async () => {
+    expect((await get(`/v1/mbb/${PAST}/players/abc`)).status).toBe(400);
+    expect((await get(`/v1/mbb/${PAST}/conferences/x`)).status).toBe(400);
+    expect((await get("/v1/mbb/players/abc")).status).toBe(400);
+    expect((await get(`/v1/mbb/${PAST}/players/999`)).status).toBe(404);
+    expect((await get("/v1/wbb/players/7")).status).toBe(404);
+  });
+});
+
 function get(path: string, headers: Record<string, string> = {}) {
   return exports.default.fetch(new Request(`https://api.test${path}`, { headers }));
 }

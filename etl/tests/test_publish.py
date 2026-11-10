@@ -84,3 +84,42 @@ def test_motherduck_views_over_lake(tmp_path, fixture_paths):
     ).fetchone()[0]
     assert rows == 4  # partition column wins over the file's own season column
     loader.close()
+
+
+def test_hash_shards_keep_main_manifest_small(tmp_path, fixture_paths):
+    from cbb_etl.load_r2 import shard_of
+
+    assert shard_of("v1/mbb/2026/teams/1.json") == "v1/mbb/2026/_hashes.json"
+    assert shard_of("v1/wbb/players/9.json") == "v1/wbb/players/_hashes.json"
+    assert shard_of("v1/mbb/seasons.json") is None
+    assert shard_of("parquet/v1/mbb/pbp/season=2026/data.parquet") is None
+
+    store = LocalStore(tmp_path / "out")
+    b = _build(fixture_paths)
+    Publisher(store).publish([b], {("mbb", 2026): {"x": "1"}}, {},
+                             extra_docs={"v1/mbb/players/7.json": {"p": 7}})  # fmt: skip
+    m = Manifest.load(store)
+    assert set(m.objects) == {"v1/mbb/seasons.json"}
+    shard = json.loads(gzip.decompress(store.get("v1/mbb/2026/_hashes.json")))
+    assert set(shard) == set(b.documents)
+    assert json.loads(gzip.decompress(store.get("v1/mbb/players/_hashes.json"))) == {
+        "v1/mbb/players/7.json": shard_of and Publisher(store)._known_sha("v1/mbb/players/7.json")
+    }
+    s2 = Publisher(store).publish([_build(fixture_paths)], {("mbb", 2026): {"x": "1"}}, {},
+                                  extra_docs={"v1/mbb/players/7.json": {"p": 7}})  # fmt: skip
+    assert s2.uploaded == 0
+
+
+def test_migrates_legacy_manifest_entries(tmp_path, fixture_paths):
+    store = LocalStore(tmp_path / "out")
+    b = _build(fixture_paths)
+    Publisher(store).publish([b], {("mbb", 2026): {"x": "1"}}, {})
+    # rewrite the manifest in the old (unsharded) format
+    shard = json.loads(gzip.decompress(store.get("v1/mbb/2026/_hashes.json")))
+    store.delete(["v1/mbb/2026/_hashes.json"])
+    m = Manifest.load(store)
+    m.objects.update({k: {"sha256": v + "0" * 32} for k, v in shard.items()})
+    store.put("v1/manifest.json", GzipJsonEncoder().encode(m.to_json()))
+    s = Publisher(store).publish([_build(fixture_paths)], {("mbb", 2026): {"x": "1"}}, {})
+    assert s.uploaded == 0 and s.skipped == len(b.documents)
+    assert set(Manifest.load(store).objects) == {"v1/mbb/seasons.json"}
