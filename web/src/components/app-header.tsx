@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Menu, Moon, Search, Settings, Sun } from "lucide-react";
+import { Menu, Moon, Settings, Sun } from "lucide-react";
 import { useState } from "react";
+import { SearchDialog } from "@/components/search-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SPORTS, type Sport } from "@/lib/api-types";
 import { type Density, type Prefs, setDensity, setTheme, type Theme } from "@/lib/prefs";
 import { SPORT_LABEL, SPORT_NAME, useSeasons, useSportSeason } from "@/lib/season-context";
@@ -63,7 +63,7 @@ export function AppHeader({ prefs }: { prefs: Prefs }) {
             ))}
         </nav>
         <div className="ml-auto flex items-center gap-1">
-          <SearchButton />
+          <SearchDialog sport={sport} season={activeSeason} current={current ?? 0} />
           <ThemeToggle initial={prefs.theme} />
           <SettingsMenu initialDensity={prefs.density} />
         </div>
@@ -138,29 +138,6 @@ function SeasonPicker({ sport, season }: { sport: Sport; season: number | null }
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-function SearchButton() {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="h-7 gap-2 px-2 text-xs text-muted-foreground"
-            aria-label="Search (coming soon)"
-          >
-            <Search className="size-3.5" aria-hidden />
-            <span className="hidden sm:inline">Search</span>
-            <kbd className="hidden rounded border px-1 font-mono text-[10px] sm:inline">⌘K</kbd>
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>Search is coming soon</TooltipContent>
-    </Tooltip>
   );
 }
 

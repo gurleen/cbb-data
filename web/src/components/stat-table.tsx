@@ -82,7 +82,8 @@ function toColumnDefs<T extends RowData>(
     enableSorting: c.sortable !== false,
     sortUndefined: "last",
     sortDescFirst: c.numeric ? !c.lowerIsBetter : false,
-    sortFn: c.numeric ? undefined : "alphanumeric",
+    // numeric columns use the built-in comparator (no key at all; undefined warns)
+    ...(c.numeric ? {} : { sortFn: "alphanumeric" as const }),
     meta: c,
   });
   const out: ColumnDef<typeof features, T, unknown>[] = [];
