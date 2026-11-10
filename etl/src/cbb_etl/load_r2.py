@@ -70,6 +70,12 @@ class LocalStore:
             p.with_name(p.name + ".meta.json").unlink(missing_ok=True)
 
 
+_RETRYABLE = {"ServiceUnavailable", "SlowDown", "InternalError", "RequestTimeout"}
+
+UPLOAD_CHUNK = 5000  # objects per checkpoint (hash shards saved after each chunk)
+UPLOAD_WORKERS = 16
+
+
 class R2Store:
     def __init__(self, settings: R2Settings):
         import boto3
@@ -82,7 +88,9 @@ class R2Store:
             aws_access_key_id=settings.access_key_id,
             aws_secret_access_key=settings.secret_access_key,
             region_name="auto",
-            config=Config(retries={"max_attempts": 5, "mode": "standard"}, max_pool_connections=64),
+            config=Config(
+                retries={"max_attempts": 10, "mode": "adaptive"}, max_pool_connections=32
+            ),
         )
 
     def get(self, key: str) -> bytes | None:
@@ -92,6 +100,25 @@ class R2Store:
             return None
 
     def put(self, key: str, obj: Encoded) -> None:
+        # R2 can answer 503 "Reduce your concurrent request rate for the same object"
+        # under heavy parallel load (e.g. a client-side retry racing the original PUT).
+        # botocore retries first; this adds a slower backoff on top.
+        delay = 1.0
+        for attempt in range(6):
+            try:
+                return self._put_once(key, obj)
+            except self.client.exceptions.ClientError as e:
+                code = e.response.get("Error", {}).get("Code", "")
+                if code not in _RETRYABLE or attempt == 5:
+                    raise
+                logger.warning(
+                    "r2 put throttled; backing off",
+                    extra={"key": key, "code": code, "sleep": delay},
+                )
+                time.sleep(delay)
+                delay *= 2
+
+    def _put_once(self, key: str, obj: Encoded) -> None:
         extra: dict[str, Any] = {
             "ContentType": obj.content_type,
             "Metadata": {"sha256": obj.sha256},
@@ -261,11 +288,14 @@ class Publisher:
     def keys_with_prefix(self, prefix: str) -> list[str]:
         return sorted(k for k in self.manifest.objects if k.startswith(prefix))
 
-    def save(self) -> None:
-        """Write dirty shards, then the main manifest (last)."""
+    def _save_shards(self) -> None:
         for sk in sorted(self._dirty_shards):
             self.store.put(sk, self.encoder.encode(self._shards[sk]))
         self._dirty_shards.clear()
+
+    def save(self) -> None:
+        """Write dirty shards, then the main manifest (last)."""
+        self._save_shards()
         self.manifest.updated_at = _now()
         self.store.put(keys.MANIFEST_KEY, self.encoder.encode(self.manifest.to_json()))
         self.dirty = False
@@ -354,13 +384,24 @@ class Publisher:
         def put(item: tuple[str, Encoded]) -> None:
             self.store.put(*item)
 
-        t0 = time.monotonic()
-        with ThreadPoolExecutor(max_workers=32) as pool:
-            list(pool.map(put, items))
-        for key, enc in items:
-            self._record(key, enc, now)
-            stats.uploaded += 1
-            stats.bytes_uploaded += len(enc.body)
-        logger.info(
-            "uploaded batch", extra={"objects": len(items), "secs": round(time.monotonic() - t0, 1)}
-        )
+        # Upload in chunks and checkpoint the hash shards after each one, so a failure
+        # mid-backfill doesn't force the next run to re-upload what already landed.
+        with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as pool:
+            for i in range(0, len(items), UPLOAD_CHUNK):
+                chunk = items[i : i + UPLOAD_CHUNK]
+                t0 = time.monotonic()
+                list(pool.map(put, chunk))
+                for key, enc in chunk:
+                    self._record(key, enc, now)
+                    stats.uploaded += 1
+                    stats.bytes_uploaded += len(enc.body)
+                self._save_shards()
+                logger.info(
+                    "uploaded batch",
+                    extra={
+                        "objects": len(chunk),
+                        "done": i + len(chunk),
+                        "total": len(items),
+                        "secs": round(time.monotonic() - t0, 1),
+                    },
+                )

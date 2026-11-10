@@ -123,3 +123,30 @@ def test_migrates_legacy_manifest_entries(tmp_path, fixture_paths):
     s = Publisher(store).publish([_build(fixture_paths)], {("mbb", 2026): {"x": "1"}}, {})
     assert s.uploaded == 0 and s.skipped == len(b.documents)
     assert set(Manifest.load(store).objects) == {"v1/mbb/seasons.json"}
+
+
+def test_failed_upload_keeps_checkpointed_hashes(tmp_path, fixture_paths, monkeypatch):
+    import cbb_etl.load_r2 as lr
+
+    monkeypatch.setattr(lr, "UPLOAD_CHUNK", 2)
+    store = LocalStore(tmp_path / "out")
+    real_put = store.put
+    calls = {"n": 0}
+
+    def flaky(key, obj):
+        if key.endswith("teams/3.json"):
+            raise RuntimeError("boom")
+        calls["n"] += 1
+        real_put(key, obj)
+
+    monkeypatch.setattr(store, "put", flaky)
+    b = _build(fixture_paths)
+    try:
+        Publisher(store).publish([b], {("mbb", 2026): {"x": "1"}}, {})
+    except RuntimeError:
+        pass
+    monkeypatch.setattr(store, "put", real_put)
+    s = Publisher(store).publish([_build(fixture_paths)], {("mbb", 2026): {"x": "1"}}, {})
+    # objects from completed chunks were checkpointed and are skipped on the retry
+    assert s.skipped > 0
+    assert s.uploaded + s.skipped == len(b.documents) + 1  # + seasons.json
