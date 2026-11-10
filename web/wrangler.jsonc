@@ -4,5 +4,8 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // SSR fetches the API over a service binding (a Worker can't fetch another
+  // workers.dev URL on the same account). Browser requests go to the public URL.
+  "services": [{ "binding": "API", "service": "cbb-api" }]
 }

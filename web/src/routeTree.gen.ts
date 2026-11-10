@@ -10,33 +10,145 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SportRouteImport } from './routes/$sport'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as MethodologyRouteImport } from './routes/methodology'
+import { Route as SportIndexRouteImport } from './routes/$sport/index'
+import { Route as SportSeasonRouteImport } from './routes/$sport/$season'
+import { Route as SportSeasonIndexRouteImport } from './routes/$sport/$season/index'
+import { Route as SportSeasonConferencesIndexRouteImport } from './routes/$sport/$season/conferences/index'
+import { Route as SportSeasonPlayersIndexRouteImport } from './routes/$sport/$season/players/index'
+import { Route as SportSeasonTeamsIndexRouteImport } from './routes/$sport/$season/teams/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SportRoute = SportRouteImport.update({
+  id: '/$sport',
+  path: '/$sport',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MethodologyRoute = MethodologyRouteImport.update({
+  id: '/methodology',
+  path: '/methodology',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SportIndexRoute = SportIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SportRoute,
+} as any)
+const SportSeasonRoute = SportSeasonRouteImport.update({
+  id: '/$season',
+  path: '/$season',
+  getParentRoute: () => SportRoute,
+} as any)
+const SportSeasonIndexRoute = SportSeasonIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SportSeasonRoute,
+} as any)
+const SportSeasonConferencesIndexRoute =
+  SportSeasonConferencesIndexRouteImport.update({
+    id: '/conferences/',
+    path: '/conferences/',
+    getParentRoute: () => SportSeasonRoute,
+  } as any)
+const SportSeasonPlayersIndexRoute = SportSeasonPlayersIndexRouteImport.update({
+  id: '/players/',
+  path: '/players/',
+  getParentRoute: () => SportSeasonRoute,
+} as any)
+const SportSeasonTeamsIndexRoute = SportSeasonTeamsIndexRouteImport.update({
+  id: '/teams/',
+  path: '/teams/',
+  getParentRoute: () => SportSeasonRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$sport': typeof SportRouteWithChildren
+  '/about': typeof AboutRoute
+  '/methodology': typeof MethodologyRoute
+  '/$sport/$season': typeof SportSeasonRouteWithChildren
+  '/$sport/': typeof SportIndexRoute
+  '/$sport/$season/': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences/': typeof SportSeasonConferencesIndexRoute
+  '/$sport/$season/players/': typeof SportSeasonPlayersIndexRoute
+  '/$sport/$season/teams/': typeof SportSeasonTeamsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/methodology': typeof MethodologyRoute
+  '/$sport': typeof SportIndexRoute
+  '/$sport/$season': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences': typeof SportSeasonConferencesIndexRoute
+  '/$sport/$season/players': typeof SportSeasonPlayersIndexRoute
+  '/$sport/$season/teams': typeof SportSeasonTeamsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$sport': typeof SportRouteWithChildren
+  '/about': typeof AboutRoute
+  '/methodology': typeof MethodologyRoute
+  '/$sport/$season': typeof SportSeasonRouteWithChildren
+  '/$sport/': typeof SportIndexRoute
+  '/$sport/$season/': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences/': typeof SportSeasonConferencesIndexRoute
+  '/$sport/$season/players/': typeof SportSeasonPlayersIndexRoute
+  '/$sport/$season/teams/': typeof SportSeasonTeamsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/$sport'
+    | '/about'
+    | '/methodology'
+    | '/$sport/$season'
+    | '/$sport/'
+    | '/$sport/$season/'
+    | '/$sport/$season/conferences/'
+    | '/$sport/$season/players/'
+    | '/$sport/$season/teams/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/about'
+    | '/methodology'
+    | '/$sport'
+    | '/$sport/$season'
+    | '/$sport/$season/conferences'
+    | '/$sport/$season/players'
+    | '/$sport/$season/teams'
+  id:
+    | '__root__'
+    | '/'
+    | '/$sport'
+    | '/about'
+    | '/methodology'
+    | '/$sport/$season'
+    | '/$sport/'
+    | '/$sport/$season/'
+    | '/$sport/$season/conferences/'
+    | '/$sport/$season/players/'
+    | '/$sport/$season/teams/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SportRoute: typeof SportRouteWithChildren
+  AboutRoute: typeof AboutRoute
+  MethodologyRoute: typeof MethodologyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +160,107 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$sport': {
+      id: '/$sport'
+      path: '/$sport'
+      fullPath: '/$sport'
+      preLoaderRoute: typeof SportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/methodology': {
+      id: '/methodology'
+      path: '/methodology'
+      fullPath: '/methodology'
+      preLoaderRoute: typeof MethodologyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$sport/': {
+      id: '/$sport/'
+      path: '/'
+      fullPath: '/$sport/'
+      preLoaderRoute: typeof SportIndexRouteImport
+      parentRoute: typeof SportRoute
+    }
+    '/$sport/$season': {
+      id: '/$sport/$season'
+      path: '/$season'
+      fullPath: '/$sport/$season'
+      preLoaderRoute: typeof SportSeasonRouteImport
+      parentRoute: typeof SportRoute
+    }
+    '/$sport/$season/': {
+      id: '/$sport/$season/'
+      path: '/'
+      fullPath: '/$sport/$season/'
+      preLoaderRoute: typeof SportSeasonIndexRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
+    '/$sport/$season/conferences/': {
+      id: '/$sport/$season/conferences/'
+      path: '/conferences'
+      fullPath: '/$sport/$season/conferences/'
+      preLoaderRoute: typeof SportSeasonConferencesIndexRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
+    '/$sport/$season/players/': {
+      id: '/$sport/$season/players/'
+      path: '/players'
+      fullPath: '/$sport/$season/players/'
+      preLoaderRoute: typeof SportSeasonPlayersIndexRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
+    '/$sport/$season/teams/': {
+      id: '/$sport/$season/teams/'
+      path: '/teams'
+      fullPath: '/$sport/$season/teams/'
+      preLoaderRoute: typeof SportSeasonTeamsIndexRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
   }
 }
 
+interface SportSeasonRouteChildren {
+  SportSeasonIndexRoute: typeof SportSeasonIndexRoute
+  SportSeasonConferencesIndexRoute: typeof SportSeasonConferencesIndexRoute
+  SportSeasonPlayersIndexRoute: typeof SportSeasonPlayersIndexRoute
+  SportSeasonTeamsIndexRoute: typeof SportSeasonTeamsIndexRoute
+}
+
+const SportSeasonRouteChildren: SportSeasonRouteChildren = {
+  SportSeasonIndexRoute: SportSeasonIndexRoute,
+  SportSeasonConferencesIndexRoute: SportSeasonConferencesIndexRoute,
+  SportSeasonPlayersIndexRoute: SportSeasonPlayersIndexRoute,
+  SportSeasonTeamsIndexRoute: SportSeasonTeamsIndexRoute,
+}
+
+const SportSeasonRouteWithChildren = SportSeasonRoute._addFileChildren(
+  SportSeasonRouteChildren,
+)
+
+interface SportRouteChildren {
+  SportSeasonRoute: typeof SportSeasonRouteWithChildren
+  SportIndexRoute: typeof SportIndexRoute
+}
+
+const SportRouteChildren: SportRouteChildren = {
+  SportSeasonRoute: SportSeasonRouteWithChildren,
+  SportIndexRoute: SportIndexRoute,
+}
+
+const SportRouteWithChildren = SportRoute._addFileChildren(SportRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SportRoute: SportRouteWithChildren,
+  AboutRoute: AboutRoute,
+  MethodologyRoute: MethodologyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

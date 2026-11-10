@@ -91,7 +91,7 @@ cookie, the same way as the theme.
 | `--border` | `#232830` | `#e3e6ea` | dividers, table grid |
 | `--foreground` | `#e6e8eb` | `#111418` | primary text |
 | `--muted-foreground` | `#8b929c` | `#5b636e` | secondary text, headers |
-| `--accent` | `#3b82f6` | `#2563eb` | links, focus, selected |
+| `--primary` | `#3b82f6` | `#2563eb` | links, focus, selected (shadcn's `--accent` is the hover surface) |
 | `--positive` | `#22c55e` | `#15803d` | good values, wins |
 | `--negative` | `#ef4444` | `#b91c1c` | bad values, losses |
 
@@ -326,7 +326,7 @@ The frontend uses **only** the public API. Loaders call it through a typed clien
 ## 9. Accessibility and SEO
 
 * Proper `<table>` semantics. Sortable headers are buttons with `aria-sort`.
-* Full keyboard navigation, visible focus rings (`--accent`), and respect for
+* Full keyboard navigation, visible focus rings (`--primary`), and respect for
   `prefers-reduced-motion`.
 * Per-page `<title>` and meta description, e.g. "UConn Huskies 2025-26 stats — cbb".
 * Canonical URLs (slug redirects), plus a `sitemap.xml` generated from `seasons.json` and
