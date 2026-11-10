@@ -1,6 +1,21 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createIsomorphicFn } from "@tanstack/react-start";
-import type { SeasonsDoc, Sport, TeamDoc, TeamStatsDoc, TeamsDoc } from "./api-types";
+import type {
+  CareerDoc,
+  ConferenceDoc,
+  ConferencesDoc,
+  PlayerDoc,
+  PlayerRow,
+  PlayersDocRaw,
+  SearchDoc,
+  SeasonsDoc,
+  Sport,
+  TeamDoc,
+  TeamDocFull,
+  TeamGamesDoc,
+  TeamStatsDoc,
+  TeamsDoc,
+} from "./api-types";
 
 /** Public API origin (browser requests, and SSR in dev). */
 export const API_URL =
@@ -66,7 +81,18 @@ export const teamsQuery = (sport: Sport, season: number, current: number) =>
 export const teamQuery = (sport: Sport, season: number, teamId: number, current: number) =>
   queryOptions({
     queryKey: ["team", sport, season, teamId],
-    queryFn: () => apiGet<TeamDoc>(`/v1/${sport}/${season}/teams/${teamId}`),
+    // Defaults keep older objects (built before ranks/rosters existed) renderable.
+    queryFn: async () => {
+      const doc = await apiGet<Partial<TeamDocFull> & TeamDoc>(
+        `/v1/${sport}/${season}/teams/${teamId}`,
+      );
+      return {
+        ...doc,
+        ranks: doc.ranks ?? {},
+        rank_field: doc.rank_field ?? 0,
+        roster: doc.roster ?? [],
+      };
+    },
     staleTime: staleFor(season, current),
   });
 
@@ -76,3 +102,80 @@ export const teamStatsQuery = (sport: Sport, season: number, current: number) =>
     queryFn: () => apiGet<TeamStatsDoc>(`/v1/${sport}/${season}/team-stats`),
     staleTime: staleFor(season, current),
   });
+
+export const teamGamesQuery = (sport: Sport, season: number, teamId: number, current: number) =>
+  queryOptions({
+    queryKey: ["team-games", sport, season, teamId],
+    queryFn: () => apiGet<TeamGamesDoc>(`/v1/${sport}/${season}/teams/${teamId}/games`),
+    staleTime: staleFor(season, current),
+  });
+
+export const conferencesQuery = (sport: Sport, season: number, current: number) =>
+  queryOptions({
+    queryKey: ["conferences", sport, season],
+    queryFn: () => apiGet<ConferencesDoc>(`/v1/${sport}/${season}/conferences`),
+    staleTime: staleFor(season, current),
+  });
+
+export const conferenceQuery = (sport: Sport, season: number, id: number, current: number) =>
+  queryOptions({
+    queryKey: ["conference", sport, season, id],
+    queryFn: () => apiGet<ConferenceDoc>(`/v1/${sport}/${season}/conferences/${id}`),
+    staleTime: staleFor(season, current),
+  });
+
+export interface PlayersDoc extends Omit<PlayersDocRaw, "columns" | "data"> {
+  rows: PlayerRow[];
+}
+
+/** Expand the columnar leaderboard into row objects. */
+export function expandPlayers(raw: PlayersDocRaw): PlayersDoc {
+  const { columns, data, ...rest } = raw;
+  const rows = data.map((r) => {
+    const o: Record<string, unknown> = {};
+    for (let i = 0; i < columns.length; i++) o[columns[i]] = r[i];
+    return o as unknown as PlayerRow;
+  });
+  return { ...rest, rows };
+}
+
+export const playersQuery = (sport: Sport, season: number, current: number, all = false) =>
+  queryOptions({
+    queryKey: ["players", sport, season, all],
+    queryFn: async () =>
+      expandPlayers(
+        await apiGet<PlayersDocRaw>(`/v1/${sport}/${season}/${all ? "players-all" : "players"}`),
+      ),
+    staleTime: staleFor(season, current),
+  });
+
+export const playerQuery = (sport: Sport, season: number, id: number, current: number) =>
+  queryOptions({
+    queryKey: ["player", sport, season, id],
+    queryFn: () => apiGet<PlayerDoc>(`/v1/${sport}/${season}/players/${id}`),
+    staleTime: staleFor(season, current),
+  });
+
+export const careerQuery = (sport: Sport, id: number) =>
+  queryOptions({
+    queryKey: ["career", sport, id],
+    queryFn: () => apiGet<CareerDoc>(`/v1/${sport}/players/${id}`),
+    staleTime: CURRENT_STALE,
+  });
+
+export const searchQuery = (sport: Sport, season: number, current: number) =>
+  queryOptions({
+    queryKey: ["search", sport, season],
+    queryFn: () => apiGet<SearchDoc>(`/v1/${sport}/${season}/search`),
+    staleTime: staleFor(season, current),
+  });
+
+/** Resolve "41-uconn-huskies" -> 41 (null if no leading id). */
+export function parseEntityKey(key: string): number | null {
+  const m = /^(\d{1,12})(?:-|$)/.exec(key);
+  return m ? Number(m[1]) : null;
+}
+
+export function entityKey(id: number, slug: string | null | undefined): string {
+  return slug ? `${id}-${slug}` : String(id);
+}

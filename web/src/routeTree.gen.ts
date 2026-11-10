@@ -17,8 +17,11 @@ import { Route as SportIndexRouteImport } from './routes/$sport/index'
 import { Route as SportSeasonRouteImport } from './routes/$sport/$season'
 import { Route as SportSeasonIndexRouteImport } from './routes/$sport/$season/index'
 import { Route as SportSeasonConferencesIndexRouteImport } from './routes/$sport/$season/conferences/index'
+import { Route as SportSeasonConferencesConferenceIdRouteImport } from './routes/$sport/$season/conferences/$conferenceId'
 import { Route as SportSeasonPlayersIndexRouteImport } from './routes/$sport/$season/players/index'
+import { Route as SportSeasonPlayersPlayerKeyRouteImport } from './routes/$sport/$season/players/$playerKey'
 import { Route as SportSeasonTeamsIndexRouteImport } from './routes/$sport/$season/teams/index'
+import { Route as SportSeasonTeamsTeamKeyRouteImport } from './routes/$sport/$season/teams/$teamKey'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -61,14 +64,31 @@ const SportSeasonConferencesIndexRoute =
     path: '/conferences/',
     getParentRoute: () => SportSeasonRoute,
   } as any)
+const SportSeasonConferencesConferenceIdRoute =
+  SportSeasonConferencesConferenceIdRouteImport.update({
+    id: '/conferences/$conferenceId',
+    path: '/conferences/$conferenceId',
+    getParentRoute: () => SportSeasonRoute,
+  } as any)
 const SportSeasonPlayersIndexRoute = SportSeasonPlayersIndexRouteImport.update({
   id: '/players/',
   path: '/players/',
   getParentRoute: () => SportSeasonRoute,
 } as any)
+const SportSeasonPlayersPlayerKeyRoute =
+  SportSeasonPlayersPlayerKeyRouteImport.update({
+    id: '/players/$playerKey',
+    path: '/players/$playerKey',
+    getParentRoute: () => SportSeasonRoute,
+  } as any)
 const SportSeasonTeamsIndexRoute = SportSeasonTeamsIndexRouteImport.update({
   id: '/teams/',
   path: '/teams/',
+  getParentRoute: () => SportSeasonRoute,
+} as any)
+const SportSeasonTeamsTeamKeyRoute = SportSeasonTeamsTeamKeyRouteImport.update({
+  id: '/teams/$teamKey',
+  path: '/teams/$teamKey',
   getParentRoute: () => SportSeasonRoute,
 } as any)
 
@@ -80,6 +100,9 @@ export interface FileRoutesByFullPath {
   '/$sport/$season': typeof SportSeasonRouteWithChildren
   '/$sport/': typeof SportIndexRoute
   '/$sport/$season/': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences/$conferenceId': typeof SportSeasonConferencesConferenceIdRoute
+  '/$sport/$season/players/$playerKey': typeof SportSeasonPlayersPlayerKeyRoute
+  '/$sport/$season/teams/$teamKey': typeof SportSeasonTeamsTeamKeyRoute
   '/$sport/$season/conferences/': typeof SportSeasonConferencesIndexRoute
   '/$sport/$season/players/': typeof SportSeasonPlayersIndexRoute
   '/$sport/$season/teams/': typeof SportSeasonTeamsIndexRoute
@@ -90,6 +113,9 @@ export interface FileRoutesByTo {
   '/methodology': typeof MethodologyRoute
   '/$sport': typeof SportIndexRoute
   '/$sport/$season': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences/$conferenceId': typeof SportSeasonConferencesConferenceIdRoute
+  '/$sport/$season/players/$playerKey': typeof SportSeasonPlayersPlayerKeyRoute
+  '/$sport/$season/teams/$teamKey': typeof SportSeasonTeamsTeamKeyRoute
   '/$sport/$season/conferences': typeof SportSeasonConferencesIndexRoute
   '/$sport/$season/players': typeof SportSeasonPlayersIndexRoute
   '/$sport/$season/teams': typeof SportSeasonTeamsIndexRoute
@@ -103,6 +129,9 @@ export interface FileRoutesById {
   '/$sport/$season': typeof SportSeasonRouteWithChildren
   '/$sport/': typeof SportIndexRoute
   '/$sport/$season/': typeof SportSeasonIndexRoute
+  '/$sport/$season/conferences/$conferenceId': typeof SportSeasonConferencesConferenceIdRoute
+  '/$sport/$season/players/$playerKey': typeof SportSeasonPlayersPlayerKeyRoute
+  '/$sport/$season/teams/$teamKey': typeof SportSeasonTeamsTeamKeyRoute
   '/$sport/$season/conferences/': typeof SportSeasonConferencesIndexRoute
   '/$sport/$season/players/': typeof SportSeasonPlayersIndexRoute
   '/$sport/$season/teams/': typeof SportSeasonTeamsIndexRoute
@@ -117,6 +146,9 @@ export interface FileRouteTypes {
     | '/$sport/$season'
     | '/$sport/'
     | '/$sport/$season/'
+    | '/$sport/$season/conferences/$conferenceId'
+    | '/$sport/$season/players/$playerKey'
+    | '/$sport/$season/teams/$teamKey'
     | '/$sport/$season/conferences/'
     | '/$sport/$season/players/'
     | '/$sport/$season/teams/'
@@ -127,6 +159,9 @@ export interface FileRouteTypes {
     | '/methodology'
     | '/$sport'
     | '/$sport/$season'
+    | '/$sport/$season/conferences/$conferenceId'
+    | '/$sport/$season/players/$playerKey'
+    | '/$sport/$season/teams/$teamKey'
     | '/$sport/$season/conferences'
     | '/$sport/$season/players'
     | '/$sport/$season/teams'
@@ -139,6 +174,9 @@ export interface FileRouteTypes {
     | '/$sport/$season'
     | '/$sport/'
     | '/$sport/$season/'
+    | '/$sport/$season/conferences/$conferenceId'
+    | '/$sport/$season/players/$playerKey'
+    | '/$sport/$season/teams/$teamKey'
     | '/$sport/$season/conferences/'
     | '/$sport/$season/players/'
     | '/$sport/$season/teams/'
@@ -209,11 +247,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SportSeasonConferencesIndexRouteImport
       parentRoute: typeof SportSeasonRoute
     }
+    '/$sport/$season/conferences/$conferenceId': {
+      id: '/$sport/$season/conferences/$conferenceId'
+      path: '/conferences/$conferenceId'
+      fullPath: '/$sport/$season/conferences/$conferenceId'
+      preLoaderRoute: typeof SportSeasonConferencesConferenceIdRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
     '/$sport/$season/players/': {
       id: '/$sport/$season/players/'
       path: '/players'
       fullPath: '/$sport/$season/players/'
       preLoaderRoute: typeof SportSeasonPlayersIndexRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
+    '/$sport/$season/players/$playerKey': {
+      id: '/$sport/$season/players/$playerKey'
+      path: '/players/$playerKey'
+      fullPath: '/$sport/$season/players/$playerKey'
+      preLoaderRoute: typeof SportSeasonPlayersPlayerKeyRouteImport
       parentRoute: typeof SportSeasonRoute
     }
     '/$sport/$season/teams/': {
@@ -223,11 +275,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SportSeasonTeamsIndexRouteImport
       parentRoute: typeof SportSeasonRoute
     }
+    '/$sport/$season/teams/$teamKey': {
+      id: '/$sport/$season/teams/$teamKey'
+      path: '/teams/$teamKey'
+      fullPath: '/$sport/$season/teams/$teamKey'
+      preLoaderRoute: typeof SportSeasonTeamsTeamKeyRouteImport
+      parentRoute: typeof SportSeasonRoute
+    }
   }
 }
 
 interface SportSeasonRouteChildren {
   SportSeasonIndexRoute: typeof SportSeasonIndexRoute
+  SportSeasonConferencesConferenceIdRoute: typeof SportSeasonConferencesConferenceIdRoute
+  SportSeasonPlayersPlayerKeyRoute: typeof SportSeasonPlayersPlayerKeyRoute
+  SportSeasonTeamsTeamKeyRoute: typeof SportSeasonTeamsTeamKeyRoute
   SportSeasonConferencesIndexRoute: typeof SportSeasonConferencesIndexRoute
   SportSeasonPlayersIndexRoute: typeof SportSeasonPlayersIndexRoute
   SportSeasonTeamsIndexRoute: typeof SportSeasonTeamsIndexRoute
@@ -235,6 +297,10 @@ interface SportSeasonRouteChildren {
 
 const SportSeasonRouteChildren: SportSeasonRouteChildren = {
   SportSeasonIndexRoute: SportSeasonIndexRoute,
+  SportSeasonConferencesConferenceIdRoute:
+    SportSeasonConferencesConferenceIdRoute,
+  SportSeasonPlayersPlayerKeyRoute: SportSeasonPlayersPlayerKeyRoute,
+  SportSeasonTeamsTeamKeyRoute: SportSeasonTeamsTeamKeyRoute,
   SportSeasonConferencesIndexRoute: SportSeasonConferencesIndexRoute,
   SportSeasonPlayersIndexRoute: SportSeasonPlayersIndexRoute,
   SportSeasonTeamsIndexRoute: SportSeasonTeamsIndexRoute,

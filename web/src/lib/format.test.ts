@@ -3,6 +3,7 @@ import {
   DASH,
   fmt1,
   fmtDate,
+  fmtGameDate,
   fmtInt,
   fmtMadeAtt,
   fmtOrdinal,
@@ -76,5 +77,8 @@ describe("format", () => {
     expect(seasonLabel(2000)).toBe("1999-00");
     expect(fmtDate("2026-11-10T07:02:00Z")).toBe("Nov 10, 2026");
     expect(fmtDate(null)).toBe(DASH);
+    // 00:00Z is the previous evening in US Eastern time
+    expect(fmtGameDate("2025-11-04T00:00:00Z")).toBe("Nov 3");
+    expect(fmtGameDate("2025-11-04T23:00:00Z", true)).toBe("Nov 4, 2025");
   });
 });

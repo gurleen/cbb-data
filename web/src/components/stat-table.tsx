@@ -5,8 +5,10 @@
 import {
   type ColumnDef,
   columnVisibilityFeature,
+  createPaginatedRowModel,
   createSortedRowModel,
   type RowData,
+  rowPaginationFeature,
   rowSortingFeature,
   type SortingState,
   sortFn_alphanumeric,
@@ -24,6 +26,8 @@ const features = tableFeatures({
   columnVisibilityFeature,
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
+  rowPaginationFeature,
+  paginatedRowModel: createPaginatedRowModel(),
 });
 
 export interface StatColumn<T extends RowData> {
@@ -63,6 +67,8 @@ export interface StatTableProps<T extends RowData> {
   stickyFirst?: boolean;
   caption?: string;
   className?: string;
+  /** Client-side pagination applied after sorting (0-based page index). */
+  page?: { index: number; size: number };
 }
 
 function toColumnDefs<T extends RowData>(
@@ -110,6 +116,7 @@ export function StatTable<T extends RowData>({
   stickyFirst = true,
   caption,
   className,
+  page,
 }: StatTableProps<T>) {
   const defs = useMemo(() => toColumnDefs(columns), [columns]);
   const columnVisibility = useMemo(
@@ -123,7 +130,13 @@ export function StatTable<T extends RowData>({
     columns: defs,
     data,
     getRowId: (row: T) => rowKey(row),
-    state: { sorting, columnVisibility },
+    state: {
+      sorting,
+      columnVisibility,
+      pagination: page
+        ? { pageIndex: page.index, pageSize: page.size }
+        : { pageIndex: 0, pageSize: Math.max(1, data.length) },
+    },
     onSortingChange: (updater) =>
       onSortingChange(typeof updater === "function" ? updater(sorting) : updater),
     enableSortingRemoval: false,
@@ -230,7 +243,9 @@ export function StatTable<T extends RowData>({
               className="group h-[var(--row-h)] border-b last:border-b-0 hover:bg-surface-hover"
             >
               {rank ? (
-                <td className="px-2 text-right font-mono text-muted-foreground">{i + 1}</td>
+                <td className="px-2 text-right font-mono text-muted-foreground">
+                  {(page ? page.index * page.size : 0) + i + 1}
+                </td>
               ) : null}
               {row.getVisibleCells().map((cell) => {
                 const meta = cell.column.columnDef.meta as StatColumn<T>;

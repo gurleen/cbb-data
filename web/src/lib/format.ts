@@ -77,3 +77,16 @@ export function fmtDate(iso: string | null | undefined): string {
     timeZone: "UTC",
   });
 }
+
+/** Game date in US Eastern time ("Nov 4"); fixed zone so SSR and client agree. */
+export function fmtGameDate(iso: string | null | undefined, withYear = false): string {
+  if (!iso) return DASH;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return DASH;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(withYear ? { year: "numeric" } : {}),
+    timeZone: "America/New_York",
+  });
+}
