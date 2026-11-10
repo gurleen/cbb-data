@@ -1,0 +1,66 @@
+conference_id,conference_name,conference_short_name
+1,America East Conference,Am. East
+2,Atlantic Coast Conference,ACC
+3,Atlantic 10 Conference,A-10
+4,Big East Conference,Big East
+5,Big Sky Conference,Big Sky
+6,Big South Conference,Big South
+7,Big Ten Conference,Big Ten
+8,Big 12 Conference,Big 12
+9,Big West Conference,Big West
+10,Coastal Athletic Association,CAA
+11,Conference USA,CUSA
+12,Ivy League,Ivy
+13,Metro Conference,Metro
+14,Mid-American Conference,MAC
+15,Mid Continent Conference,Mid-Con
+16,Mid-Eastern Athletic Conference,MEAC
+18,Missouri Valley Conference,MVC
+19,Northeast Conference,NEC
+20,Ohio Valley Conference,OVC
+21,Pac-12 Conference,Pac-12
+22,Patriot League,Patriot
+23,Southeastern Conference,SEC
+24,Southern Conference,SoCon
+25,Southland Conference,Southland
+26,Southwestern Athletic Conference,SWAC
+27,Sun Belt Conference,Sun Belt
+29,West Coast Conference,WCC
+30,United Athletic Conference,UAC
+31,Big East - East,Big East E
+32,Big East - West,Big East W
+35,Mid-American - East,MAC E
+36,Mid-American - West,MAC W
+37,Sun Belt - East,Sun Belt E
+38,Sun Belt - West,Sun Belt W
+39,Southern - North,Southern N
+40,Southern - South,Southern S
+41,Mid-American - East,MAC E
+42,Mid-American - West,MAC W
+43,Division I Independents,Indep.
+44,Mountain West Conference,Mountain West
+45,Horizon League,Horizon
+46,Atlantic Sun Conference,Atlantic Sun
+47,Summit League,Summit
+48,Atlantic 10 - West,A 10 W
+49,Summit League,Summit
+53,Southland - East,Southland E
+54,Southland - West,Southland W
+57,Great West,Great West
+58,Ohio Valley - West,Ohio Valley W
+59,Ohio Valley - East,Ohio Valley E
+60,Big South - North,Big South N
+61,Big South - South,Big South S
+62,American Conference,American
+64,Conference USA - East,C-USA E
+65,Conference USA - West,C-USA W
+66,Mid-Eastern Athletic - North,MEAC N
+67,Mid-Eastern Athletic - South,MEAC S
+69,Central,Central
+70,North,North
+71,Patriot League - South,Patriot League S
+72,East,East
+73,West,West
+76,ASUN Conference - East,ASUN E
+77,ASUN Conference - West,ASUN W
+104,College Basketball Crown,CBC

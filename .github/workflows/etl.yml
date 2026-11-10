@@ -1,0 +1,106 @@
+name: etl
+
+on:
+  schedule:
+    # Daily 09:00 UTC, after upstream's ~07:00 UTC refresh. Runs year-round; the first
+    # step exits early outside the Oct-Apr season window.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      sport:
+        description: "mbb | wbb | all"
+        default: all
+        type: choice
+        options: [all, mbb, wbb]
+      seasons:
+        description: "current | all | 2024,2025 | 2015-2020"
+        default: current
+        type: string
+      targets:
+        description: "comma list of r2,lake,motherduck"
+        default: r2,lake,motherduck
+        type: string
+      include_pbp:
+        description: "also copy play-by-play to the lake"
+        default: false
+        type: boolean
+      max_seasons:
+        description: "lake/MotherDuck: only the N most recent selected seasons (blank = no cap)"
+        default: ""
+        type: string
+      force:
+        description: "ignore fingerprints and rebuild everything"
+        default: false
+        type: boolean
+
+concurrency:
+  group: etl
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: etl
+    steps:
+      - name: Season window check
+        id: window
+        working-directory: .
+        run: |
+          month=$(date -u +%-m)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$month" -ge 5 ] && [ "$month" -le 9 ]; then
+            echo "Off-season (month $month); skipping scheduled run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.window.outputs.skip != 'true'
+
+      - uses: astral-sh/setup-uv@v6
+        if: steps.window.outputs.skip != 'true'
+        with:
+          enable-cache: true
+          cache-dependency-glob: etl/uv.lock
+
+      - name: Cache upstream parquet
+        if: steps.window.outputs.skip != 'true'
+        uses: actions/cache@v4
+        with:
+          path: etl/.cache
+          key: sdv-${{ github.run_id }}
+          restore-keys: sdv-
+
+      - name: Install
+        if: steps.window.outputs.skip != 'true'
+        run: uv sync --frozen --no-dev
+
+      - name: Run ETL
+        if: steps.window.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # releases API listing (higher rate limit)
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_READ_ACCESS_KEY_ID: ${{ secrets.R2_READ_ACCESS_KEY_ID }}
+          R2_READ_SECRET_ACCESS_KEY: ${{ secrets.R2_READ_SECRET_ACCESS_KEY }}
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          SPORT: ${{ inputs.sport || 'all' }}
+          SEASONS: ${{ inputs.seasons || 'current' }}
+          TARGETS: ${{ inputs.targets || 'r2,lake,motherduck' }}
+          INCLUDE_PBP: ${{ inputs.include_pbp && '--include-pbp' || '' }}
+          MAX_SEASONS: ${{ inputs.max_seasons }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: |
+          args=(run --sport "$SPORT" --seasons "$SEASONS" --targets "$TARGETS")
+          [ -n "$INCLUDE_PBP" ] && args+=("$INCLUDE_PBP")
+          [ -n "$FORCE" ] && args+=("$FORCE")
+          [ -n "$MAX_SEASONS" ] && args+=(--max-seasons "$MAX_SEASONS")
+          uv run --no-dev cbb-etl "${args[@]}"

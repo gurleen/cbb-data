@@ -1,0 +1,19 @@
+# secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+etl/.cache/
+etl/out/
+
+# node / wrangler
+node_modules/
+worker/.wrangler/
+.DS_Store
