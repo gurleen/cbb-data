@@ -80,23 +80,26 @@ agg AS (
     FROM player_games GROUP BY 1
 ),
 roster AS (
+    -- every bio field cast to VARCHAR: types drift between sports and seasons
     SELECT CAST(athlete_id AS VARCHAR) AS rid,
-           any_value(display_name) AS name, any_value(position_abbreviation) AS position,
-           any_value(height) AS height, any_value(weight) AS weight,
-           any_value(experience_display_value) AS class, any_value(jersey) AS jersey,
-           any_value(headshot_href) AS headshot
+           any_value(display_name)::VARCHAR AS name,
+           any_value(position_abbreviation)::VARCHAR AS position,
+           any_value(height)::VARCHAR AS height, any_value(weight)::VARCHAR AS weight,
+           any_value(experience_display_value)::VARCHAR AS class,
+           any_value(jersey)::VARCHAR AS jersey,
+           any_value(headshot_href)::VARCHAR AS headshot
     FROM rosters GROUP BY 1
 )
 SELECT
     a.athlete_id,
-    coalesce(r.name, a.box_name) AS name,
-    a.box_short_name AS short_name,
+    coalesce(r.name, a.box_name::VARCHAR) AS name,
+    a.box_short_name::VARCHAR AS short_name,
     p.team_id, p.teams_played_for,
     coalesce(t.division_i, false) AS division_i,
-    coalesce(r.jersey, a.box_jersey) AS jersey,
-    coalesce(r.position, a.box_position) AS position,
+    coalesce(r.jersey, a.box_jersey::VARCHAR) AS jersey,
+    coalesce(r.position, a.box_position::VARCHAR) AS position,
     r.height, r.weight, r.class,
-    coalesce(r.headshot, a.box_headshot) AS headshot,
+    coalesce(r.headshot, a.box_headshot::VARCHAR) AS headshot,
     a.* EXCLUDE (athlete_id, box_name, box_short_name, box_jersey, box_position, box_headshot,
                  tm_min_on, tm_fga, tm_fta, tm_tov),
     a.min / nullif(a.g, 0)  AS mpg,

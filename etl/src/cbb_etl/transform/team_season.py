@@ -25,6 +25,13 @@ SELECT NULL::VARCHAR AS athlete_id, NULL::VARCHAR AS display_name,
 WHERE false
 """
 
+_OPTIONAL_PLAYER_COLUMNS = {
+    "athlete_headshot_href": "VARCHAR",
+    "athlete_short_name": "VARCHAR",
+    "athlete_jersey": "VARCHAR",
+    "athlete_position_abbreviation": "VARCHAR",
+}
+
 _EMPTY_STANDINGS = """
 CREATE OR REPLACE VIEW standings AS
 SELECT NULL::INTEGER AS team_id, NULL::VARCHAR AS group_id, NULL::VARCHAR AS group_name,
@@ -418,9 +425,12 @@ def build_season(
         con.execute(_EMPTY_ROSTERS)
     has_players = bool(paths.get("player_boxscores"))
     if has_players:
-        con.execute(
-            f"CREATE VIEW player_box AS SELECT * FROM read_parquet('{paths['player_boxscores']}')"
-        )
+        src = f"read_parquet('{paths['player_boxscores']}')"
+        have = {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()}
+        # Columns that some seasons lack (e.g. MBB before ~2011 has no headshots).
+        fill = [f"NULL::{t} AS {c}" for c, t in _OPTIONAL_PLAYER_COLUMNS.items() if c not in have]
+        extra = (", " + ", ".join(fill)) if fill else ""
+        con.execute(f"CREATE VIEW player_box AS SELECT *{extra} FROM {src}")
         require_columns(con, "player_box", "player_boxscores", ctx)
     require_columns(con, "schedules", "schedules", ctx)
     require_columns(con, "team_box", "team_boxscores", ctx)
