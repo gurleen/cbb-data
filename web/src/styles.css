@@ -21,6 +21,11 @@
   --primary-foreground: #ffffff;
   --positive: #22c55e;
   --negative: #ef4444;
+  /* Chart/shading diverging pair (blue <-> red), validated for CVD with the dataviz
+     validator against #0b0d10 (dark) and #ffffff (light). Green/red failed (deutan). */
+  --chart-good: #3b82f6;
+  --chart-bad: #ef4444;
+  --chart-context: #4b525c;
 
   /* shadcn aliases */
   --card: var(--surface);
@@ -49,6 +54,9 @@
   --primary-foreground: #ffffff;
   --positive: #15803d;
   --negative: #b91c1c;
+  --chart-good: #2563eb;
+  --chart-bad: #dc2626;
+  --chart-context: #b8bec6;
 }
 
 @theme inline {

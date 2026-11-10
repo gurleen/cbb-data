@@ -6,7 +6,8 @@ import { CoverageNotice } from "@/components/coverage-notice";
 import { ColumnGroupMenu, MultiSelectMenu, Segmented } from "@/components/filters";
 import { PageHeader } from "@/components/page";
 import { Pager } from "@/components/pager";
-import { StatTable } from "@/components/stat-table";
+import { StatTable, sortLike } from "@/components/stat-table";
+import { ExportButtons, ShadeToggle } from "@/components/table-tools";
 import { playersQuery } from "@/lib/api";
 import type { Sport } from "@/lib/api-types";
 import {
@@ -29,6 +30,7 @@ const DEFAULTS = {
   cols: DEFAULT_PLAYER_GROUPS.join(","),
   pool: "qualified" as "qualified" | "all",
   page: 1,
+  shade: 0,
 };
 const search = z.object({
   sort: z.coerce.string().default(DEFAULTS.sort).catch(DEFAULTS.sort),
@@ -38,6 +40,7 @@ const search = z.object({
   cols: z.coerce.string().default(DEFAULTS.cols).catch(DEFAULTS.cols),
   pool: z.enum(["qualified", "all"]).default(DEFAULTS.pool).catch(DEFAULTS.pool),
   page: z.coerce.number().int().min(1).default(DEFAULTS.page).catch(DEFAULTS.page),
+  shade: z.coerce.number().int().min(0).max(1).default(DEFAULTS.shade).catch(DEFAULTS.shade),
 });
 
 export const Route = createFileRoute("/$sport/$season/players/")({
@@ -116,6 +119,7 @@ function PlayersPage() {
       ),
     [doc.rows, confs, poss, classes],
   );
+  const sorting = parseSortParam(sp.sort, [{ id: "ppg", desc: true }]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const page = Math.min(sp.page, pages);
 
@@ -158,6 +162,13 @@ function PlayersPage() {
               visible={list(sp.cols)}
               onChange={(v) => set({ cols: v.join(",") }, true)}
             />
+            <ShadeToggle on={sp.shade === 1} onChange={(on) => set({ shade: on ? 1 : 0 }, true)} />
+            <ExportButtons
+              columns={columns}
+              rows={sortLike(rows, columns, sorting)}
+              hidden={hidden}
+              filename={`cbb-${sport}-${season}-players`}
+            />
           </>
         }
       />
@@ -166,10 +177,11 @@ function PlayersPage() {
         data={rows}
         columns={columns}
         rowKey={(r) => String(r.player_id)}
-        sorting={parseSortParam(sp.sort, [{ id: "ppg", desc: true }])}
+        sorting={sorting}
         onSortingChange={(s) => set({ sort: sortParam(s) })}
         hidden={hidden}
         rank
+        shade={sp.shade === 1}
         page={{ index: page - 1, size: PAGE_SIZE }}
         caption={`Player stats, ${entry.label}`}
       />

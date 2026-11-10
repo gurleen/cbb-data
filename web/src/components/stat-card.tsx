@@ -40,8 +40,8 @@ export function RatingCard({
               background: neutral
                 ? "var(--muted-foreground)"
                 : pct >= 0.5
-                  ? "var(--positive)"
-                  : "var(--negative)",
+                  ? "var(--chart-good)"
+                  : "var(--chart-bad)",
               opacity: neutral ? 0.6 : 0.35 + Math.abs(pct - 0.5) * 1.3,
             }}
           />

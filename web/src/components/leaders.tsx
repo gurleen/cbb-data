@@ -93,7 +93,7 @@ export function BarList({
                 style={{
                   left: v >= 0 ? "50%" : `${50 - w}%`,
                   width: `${w}%`,
-                  background: v >= 0 ? "var(--positive)" : "var(--negative)",
+                  background: v >= 0 ? "var(--chart-good)" : "var(--chart-bad)",
                   opacity: 0.7,
                 }}
               />

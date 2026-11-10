@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter, parseSearchWith, stringifySearchWith } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { ErrorPage } from "./components/error-page";
 import { NotFound } from "./components/not-found";
 import { ApiError } from "./lib/api";
 import { routeTree } from "./routeTree.gen";
@@ -26,6 +27,7 @@ export function getRouter() {
     defaultPreloadStaleTime: 0,
     defaultPendingMs: 150,
     defaultNotFoundComponent: NotFound,
+    defaultErrorComponent: ErrorPage,
     // Plain query strings (?conf=4,7&page=2): every search param here is a flat string or
     // number, and route schemas coerce them. The default JSON encoding would quote
     // number-like strings (conf="4").

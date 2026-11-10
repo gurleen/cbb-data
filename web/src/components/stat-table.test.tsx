@@ -69,3 +69,33 @@ describe("StatTable (SSR)", () => {
     expect(html).toContain("ORtg");
   });
 });
+
+import { percentileFns, toDelimited } from "./stat-table";
+
+describe("shading and export", () => {
+  const many: Row[] = Array.from({ length: 11 }, (_, i) => ({
+    id: i,
+    name: `T${i}`,
+    ortg: 100 + i,
+    drtg: 100 + i,
+  }));
+  it("tints high values positive, reversed when lower is better", () => {
+    const fns = percentileFns(columns, many, []);
+    expect(fns.get("ortg")?.(110)).toContain("--chart-good");
+    expect(fns.get("ortg")?.(100)).toContain("--chart-bad");
+    expect(fns.get("drtg")?.(100)).toContain("--chart-good");
+    expect(fns.get("ortg")?.(105)).toBeUndefined(); // median: no tint
+    expect(fns.has("name")).toBe(false);
+  });
+  it("exports raw values with grouped headers", () => {
+    const csv = toDelimited(columns, rows.slice(0, 2), [], ",");
+    expect(csv.split("\n")).toEqual([
+      "Team,Ratings ORtg,Ratings DRtg",
+      "Alpha,110.2,99.1",
+      "Beta,,95",
+    ]);
+    expect(toDelimited(columns, rows.slice(0, 1), ["drtg"], "\t")).toBe(
+      "Team\tRatings ORtg\nAlpha\t110.2",
+    );
+  });
+});

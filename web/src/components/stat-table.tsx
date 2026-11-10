@@ -51,6 +51,8 @@ export interface StatColumn<T extends RowData> {
   sortable?: boolean;
   /** Fixed width in px (use for the sticky entity column). */
   width?: number;
+  /** Exclude from rank shading even when numeric (counts, records, ranks). */
+  noShade?: boolean;
 }
 
 export interface StatTableProps<T extends RowData> {
@@ -69,6 +71,8 @@ export interface StatTableProps<T extends RowData> {
   className?: string;
   /** Client-side pagination applied after sorting (0-based page index). */
   page?: { index: number; size: number };
+  /** Tint numeric cells by percentile within `data` (spec §3.3 rank shading). */
+  shade?: boolean;
 }
 
 function toColumnDefs<T extends RowData>(
@@ -118,6 +122,7 @@ export function StatTable<T extends RowData>({
   caption,
   className,
   page,
+  shade = false,
 }: StatTableProps<T>) {
   const defs = useMemo(() => toColumnDefs(columns), [columns]);
   const columnVisibility = useMemo(
@@ -125,6 +130,10 @@ export function StatTable<T extends RowData>({
     [hidden],
   );
   const firstId = columns[0]?.id;
+  const percentiles = useMemo(
+    () => (shade ? percentileFns(columns, data, hidden) : null),
+    [shade, columns, data, hidden],
+  );
 
   const table = useTable({
     features,
@@ -258,9 +267,11 @@ export function StatTable<T extends RowData>({
                     ? meta.format(value, row.original)
                     : (value ?? DASH);
                 const isFirst = meta.id === firstId && stickyFirst;
+                const tint = percentiles?.get(meta.id)?.(value);
                 return (
                   <td
                     key={cell.id}
+                    style={tint ? { background: tint } : undefined}
                     className={cn(
                       "px-2 py-1 whitespace-nowrap",
                       right ? "text-right" : "text-left",
@@ -289,4 +300,85 @@ export function StatTable<T extends RowData>({
       </table>
     </div>
   );
+}
+
+/**
+ * Per-column percentile -> background tint. Diverging scale (negative .. neutral ..
+ * positive), max 18% opacity so text stays readable; reversed for lowerIsBetter.
+ */
+export function percentileFns<T extends RowData>(
+  columns: StatColumn<T>[],
+  data: T[],
+  hidden: string[],
+): Map<string, (v: unknown) => string | undefined> {
+  const out = new Map<string, (v: unknown) => string | undefined>();
+  for (const c of columns) {
+    if (!c.numeric || c.noShade || hidden.includes(c.id)) continue;
+    const vals = data
+      .map((r) => c.value(r))
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+      .sort((a, b) => a - b);
+    if (vals.length < 5) continue;
+    out.set(c.id, (v) => {
+      if (typeof v !== "number") return undefined;
+      // fraction of values strictly below v (binary search)
+      let lo = 0;
+      let hi = vals.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (vals[mid] < v) lo = mid + 1;
+        else hi = mid;
+      }
+      let p = lo / (vals.length - 1 || 1);
+      if (c.lowerIsBetter) p = 1 - p;
+      const d = p - 0.5;
+      if (Math.abs(d) < 0.1) return undefined;
+      const alpha = Math.min(18, Math.round(Math.abs(d) * 36));
+      const color = d > 0 ? "var(--chart-good)" : "var(--chart-bad)";
+      return `color-mix(in srgb, ${color} ${alpha}%, transparent)`;
+    });
+  }
+  return out;
+}
+
+/** Rows -> delimited text (raw values, visible columns), for copy/CSV export. */
+export function toDelimited<T extends RowData>(
+  columns: StatColumn<T>[],
+  rows: T[],
+  hidden: string[],
+  sep: "," | "\t",
+): string {
+  const cols = columns.filter((c) => !hidden.includes(c.id));
+  const esc = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return sep === "," && /[",\n]/.test(s)
+      ? `"${s.replace(/"/g, '""')}"`
+      : s.replace(/[\t\n]/g, " ");
+  };
+  const header = cols.map((c) => esc(c.group ? `${c.group} ${c.header}` : c.header)).join(sep);
+  return [header, ...rows.map((r) => cols.map((c) => esc(c.value(r))).join(sep))].join("\n");
+}
+
+/** Sort rows like the table does (multi-sort, nulls last) — for exports. */
+export function sortLike<T extends RowData>(
+  rows: T[],
+  columns: StatColumn<T>[],
+  sorting: SortingState,
+): T[] {
+  const byId = new Map(columns.map((c) => [c.id, c]));
+  return [...rows].sort((a, b) => {
+    for (const s of sorting) {
+      const c = byId.get(s.id);
+      if (!c) continue;
+      const x = c.value(a);
+      const y = c.value(b);
+      if (x === y) continue;
+      if (x === null || x === undefined) return 1;
+      if (y === null || y === undefined) return -1;
+      const cmp =
+        typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+      if (cmp) return s.desc ? -cmp : cmp;
+    }
+    return 0;
+  });
 }

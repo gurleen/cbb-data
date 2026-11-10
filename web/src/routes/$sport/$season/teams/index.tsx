@@ -5,7 +5,8 @@ import { z } from "zod";
 import { CoverageNotice } from "@/components/coverage-notice";
 import { ColumnGroupMenu, MultiSelectMenu, NumberFilter } from "@/components/filters";
 import { PageHeader } from "@/components/page";
-import { StatTable } from "@/components/stat-table";
+import { StatTable, sortLike } from "@/components/stat-table";
+import { ExportButtons, ShadeToggle } from "@/components/table-tools";
 import { teamStatsQuery } from "@/lib/api";
 import type { Sport } from "@/lib/api-types";
 import { SPORT_LABEL } from "@/lib/season-context";
@@ -13,12 +14,19 @@ import { parseSortParam, sortParam } from "@/lib/sort-param";
 import { DEFAULT_TEAM_GROUPS, hiddenColumns, TEAM_GROUPS, teamColumns } from "@/lib/team-columns";
 import { useSeasonRoute } from "@/lib/use-season";
 
-const DEFAULTS = { sort: "-net_rtg", conf: "", cols: DEFAULT_TEAM_GROUPS.join(","), min: 0 };
+const DEFAULTS = {
+  sort: "-net_rtg",
+  conf: "",
+  cols: DEFAULT_TEAM_GROUPS.join(","),
+  min: 0,
+  shade: 0,
+};
 const search = z.object({
   sort: z.coerce.string().default(DEFAULTS.sort).catch(DEFAULTS.sort),
   conf: z.coerce.string().default(DEFAULTS.conf).catch(DEFAULTS.conf),
   cols: z.coerce.string().default(DEFAULTS.cols).catch(DEFAULTS.cols),
   min: z.coerce.number().int().min(0).max(45).default(DEFAULTS.min).catch(DEFAULTS.min),
+  shade: z.coerce.number().int().min(0).max(1).default(DEFAULTS.shade).catch(DEFAULTS.shade),
 });
 
 export const Route = createFileRoute("/$sport/$season/teams/")({
@@ -95,6 +103,13 @@ function TeamsPage() {
               visible={visibleGroups}
               onChange={(v) => set({ cols: v.join(",") })}
             />
+            <ShadeToggle on={sp.shade === 1} onChange={(on) => set({ shade: on ? 1 : 0 })} />
+            <ExportButtons
+              columns={columns}
+              rows={sortLike(rows, columns, sorting)}
+              hidden={hidden}
+              filename={`cbb-${sport}-${season}-teams`}
+            />
           </>
         }
       />
@@ -107,6 +122,7 @@ function TeamsPage() {
         onSortingChange={(s) => set({ sort: sortParam(s) })}
         hidden={hidden}
         rank
+        shade={sp.shade === 1}
         caption={`Team stats, ${entry.label}`}
       />
     </>

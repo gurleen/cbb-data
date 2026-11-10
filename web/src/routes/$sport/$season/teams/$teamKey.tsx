@@ -2,6 +2,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import type { SortingState } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import { MarginChart } from "@/components/charts";
 import { CoverageNotice } from "@/components/coverage-notice";
 import { rosterColumns, teamGameColumns } from "@/components/game-columns";
 import { RatingCard, Section } from "@/components/stat-card";
@@ -250,6 +251,9 @@ function GameLog() {
   if (!data) return null;
   return (
     <Section title={`Game log (${data.games.filter((g) => g.completed).length} played)`}>
+      <div className="mb-2">
+        <MarginChart games={data.games} />
+      </div>
       <StatTable
         data={data.games}
         columns={columns}

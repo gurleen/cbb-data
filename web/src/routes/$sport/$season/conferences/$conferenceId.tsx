@@ -1,13 +1,14 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import type { SortingState } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import { RatingScatter } from "@/components/charts";
 import { CoverageNotice } from "@/components/coverage-notice";
 import { PageHeader } from "@/components/page";
 import { RatingCard, Section } from "@/components/stat-card";
 import { type StatColumn, StatTable } from "@/components/stat-table";
 import { TeamLink } from "@/components/team";
-import { ApiError, conferenceQuery, conferencesQuery } from "@/lib/api";
+import { ApiError, conferenceQuery, conferencesQuery, teamStatsQuery } from "@/lib/api";
 import type { ConferenceTeamRow, Sport } from "@/lib/api-types";
 import { fmt1, fmtRecord, fmtSigned, fmtWinPct } from "@/lib/format";
 import { SPORT_LABEL } from "@/lib/season-context";
@@ -58,6 +59,9 @@ function ConferencePage() {
   const { data } = useSuspenseQuery(conferenceQuery(sport, season, confId, current));
   const { data: all } = useSuspenseQuery(conferencesQuery(sport, season, current));
   const c = data.conference;
+  // The D-I field for the scatter (cached from other pages; loads client-side if not).
+  const { data: field } = useQuery(teamStatsQuery(sport, season, current));
+  const memberIds = useMemo(() => new Set(data.teams.map((t) => t.team_id)), [data.teams]);
   const ranked = all.conferences.filter((x) => x.rank !== null).length;
   const [standSort, setStandSort] = useState<SortingState>([{ id: "conf_win_pct", desc: true }]);
   const [rateSort, setRateSort] = useState<SortingState>([{ id: "net_rtg", desc: true }]);
@@ -193,6 +197,15 @@ function ConferencePage() {
           caption="Standings"
         />
       </Section>
+      {field ? (
+        <Section title="Offense vs. defense">
+          <RatingScatter
+            field={field.rows}
+            memberIds={memberIds}
+            memberLabel={c.short_name ?? c.name ?? "Conference"}
+          />
+        </Section>
+      ) : null}
       <Section title="Team ratings">
         <StatTable
           data={data.teams}

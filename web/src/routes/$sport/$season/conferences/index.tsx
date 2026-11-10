@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import { z } from "zod";
 import { CoverageNotice } from "@/components/coverage-notice";
 import { PageHeader } from "@/components/page";
-import { type StatColumn, StatTable } from "@/components/stat-table";
+import { type StatColumn, StatTable, sortLike } from "@/components/stat-table";
+import { ExportButtons } from "@/components/table-tools";
 import { TeamLink } from "@/components/team";
 import { conferencesQuery } from "@/lib/api";
 import type { ConferenceRow, Sport } from "@/lib/api-types";
@@ -43,6 +44,7 @@ function ConferencesPage() {
   const sp = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
+  const sorting = parseSortParam(sp.sort, [{ id: "avg_net_rtg", desc: true }]);
   const columns = useMemo<StatColumn<ConferenceRow>[]>(() => {
     const n = (v: unknown) => v as number | null;
     return [
@@ -154,13 +156,24 @@ function ConferencesPage() {
 
   return (
     <>
-      <PageHeader title="Conferences" subtitle={`${entry.label} · ${data.count} conferences`} />
+      <PageHeader
+        title="Conferences"
+        subtitle={`${entry.label} · ${data.count} conferences`}
+        actions={
+          <ExportButtons
+            columns={columns}
+            rows={sortLike(data.conferences, columns, sorting)}
+            hidden={[]}
+            filename={`cbb-${sport}-${season}-conferences`}
+          />
+        }
+      />
       <CoverageNotice coverage={entry.box_coverage} />
       <StatTable
         data={data.conferences}
         columns={columns}
         rowKey={(c) => String(c.id)}
-        sorting={parseSortParam(sp.sort, [{ id: "avg_net_rtg", desc: true }])}
+        sorting={sorting}
         onSortingChange={(s) =>
           navigate({ search: { sort: sortParam(s) }, replace: true, resetScroll: false })
         }
