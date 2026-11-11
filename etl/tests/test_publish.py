@@ -1,3 +1,4 @@
+import contextlib
 import gzip
 import json
 
@@ -141,10 +142,8 @@ def test_failed_upload_keeps_checkpointed_hashes(tmp_path, fixture_paths, monkey
 
     monkeypatch.setattr(store, "put", flaky)
     b = _build(fixture_paths)
-    try:
+    with contextlib.suppress(RuntimeError):
         Publisher(store).publish([b], {("mbb", 2026): {"x": "1"}}, {})
-    except RuntimeError:
-        pass
     monkeypatch.setattr(store, "put", real_put)
     s = Publisher(store).publish([_build(fixture_paths)], {("mbb", 2026): {"x": "1"}}, {})
     # objects from completed chunks were checkpointed and are skipped on the retry
