@@ -44,7 +44,8 @@ def test_player_documents(built):
     assert [r["player_id"] for r in rows] == [10, 20, 21]  # sorted by PPG (20, 20, 4)
     bea = docs[keys.player_key("mbb", 2026, 20)]
     assert bea["player"]["slug"] == "bea-beta"
-    assert bea["line"]["ppg"] == 20.0 and bea["ranks"]["ppg"] == 1
+    assert bea["line"]["ppg"] == 20.0 and "ranks" not in bea
+    assert docs[keys.player_ranks_key("mbb", 2026)]["ranks"]["20"]["ppg"] == 1
     assert [g["game_id"] for g in bea["games"]] == [101, 102]
     assert bea["games"][0]["result"] == "L" and bea["games"][1]["result"] == "W"
     roster = docs[keys.team_key("mbb", 2026, 2)]["roster"]

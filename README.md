@@ -57,7 +57,9 @@ v1/{sport}/{season}/conferences.json            conference summaries (ratings, n
 v1/{sport}/{season}/conferences/{id}.json       conference standings + member ratings
 v1/{sport}/{season}/players.json                qualified D-I players (columnar: columns + data)
 v1/{sport}/{season}/players-all.json            every D-I player with a game (columnar)
-v1/{sport}/{season}/players/{player_id}.json    player season: bio, line, ranks, game log
+v1/{sport}/{season}/players/{player_id}.json    player season: bio, line, game log
+v1/{sport}/{season}/ranks/teams.json            D-I ranks for every team (API merges into team pages)
+v1/{sport}/{season}/ranks/players.json          D-I ranks for qualified players (merged into player pages)
 v1/{sport}/{season}/search.json                 compact team + player search index
 v1/{sport}/players/{player_id}.json             player career (all seasons)
 v1/{sport}/{season}/_hashes.json                internal: content hashes for the season (not served)
@@ -241,9 +243,16 @@ From GitHub, go to Actions, then **etl**, then **Run workflow**, and set `season
 uv run cbb-etl run --sport all --seasons all
 ```
 
-A full backfill writes about 25 seasons × 2 sports × ~700 JSON objects (≈35k R2 Class A
-operations, about $0.16), plus the parquet lake. Later daily runs touch only the current
-season, and only objects whose content changed.
+A full backfill writes every team, player and career page for ~25 seasons × 2 sports
+(≈600k R2 Class A operations, most of the free tier's 1M/month), plus the parquet lake.
+Daily runs touch only the current season, and only objects whose content changed: about
+3k per sport in mid-season, mostly the pages of players and teams that played that day.
+Ranks are kept in `ranks/*.json` rather than in each page for exactly this reason (they
+shift for everyone daily); the API merges them back into team and player responses.
+
+Uploads run up to 48 at a time. When R2 throttles (503 SlowDown etc.), concurrency halves
+(down to 4) with exponential backoff per object, then climbs back by one every 50 clean
+uploads.
 
 ## Schedule
 

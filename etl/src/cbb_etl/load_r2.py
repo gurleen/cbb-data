@@ -11,6 +11,7 @@ import gzip
 import json
 import re
 import shutil
+import threading
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -73,7 +74,61 @@ class LocalStore:
 _RETRYABLE = {"ServiceUnavailable", "SlowDown", "InternalError", "RequestTimeout"}
 
 UPLOAD_CHUNK = 5000  # objects per checkpoint (hash shards saved after each chunk)
-UPLOAD_WORKERS = 16
+UPLOAD_WORKERS = 48  # upper bound; AdaptiveLimit backs off from here when R2 throttles
+UPLOAD_MIN_WORKERS = 4
+PUT_ATTEMPTS = 8  # per object, with exponential backoff (1s .. 30s) between throttles
+
+
+class Throttled(Exception):
+    """R2 asked us to slow down (503 SlowDown / ServiceUnavailable, etc.)."""
+
+
+class AdaptiveLimit:
+    """Concurrency limit with additive increase / multiplicative decrease.
+
+    Starts at `high`. A throttle halves the limit (not below `low`; at most once per
+    `cooldown` seconds, since a burst of in-flight requests tends to fail together);
+    every `grow_after` clean uploads raise it by one, back toward `high`. Worker threads
+    call acquire/release around each request, so the pool can stay at `high` threads
+    while fewer run at once.
+    """
+
+    def __init__(self, high: int, low: int = 1, grow_after: int = 50, cooldown: float = 1.0):
+        self.high, self.low, self.grow_after = high, max(1, min(low, high)), grow_after
+        self.cooldown = cooldown
+        self.limit = high
+        self.active = 0
+        self.throttles = 0
+        self._ok = 0
+        self._last_cut = float("-inf")
+        self._cv = threading.Condition()
+
+    def acquire(self) -> None:
+        with self._cv:
+            while self.active >= self.limit:
+                self._cv.wait()
+            self.active += 1
+
+    def release(self, throttled: bool = False) -> None:
+        with self._cv:
+            self.active -= 1
+            if throttled:
+                self.throttles += 1
+                self._ok = 0
+                now = time.monotonic()
+                new = max(self.low, self.limit // 2)
+                if new < self.limit and now - self._last_cut >= self.cooldown:
+                    logger.warning(
+                        "r2 throttling; lowering upload concurrency",
+                        extra={"from": self.limit, "to": new},
+                    )
+                    self.limit, self._last_cut = new, now
+            else:
+                self._ok += 1
+                if self._ok >= self.grow_after and self.limit < self.high:
+                    self.limit += 1
+                    self._ok = 0
+            self._cv.notify_all()
 
 
 class R2Store:
@@ -89,7 +144,10 @@ class R2Store:
             aws_secret_access_key=settings.secret_access_key,
             region_name="auto",
             config=Config(
-                retries={"max_attempts": 10, "mode": "adaptive"}, max_pool_connections=32
+                # botocore retries transient errors a couple of times; sustained throttling
+                # surfaces as Throttled so the uploader can lower its concurrency.
+                retries={"max_attempts": 3, "mode": "standard"},
+                max_pool_connections=UPLOAD_WORKERS + 8,
             ),
         )
 
@@ -100,23 +158,15 @@ class R2Store:
             return None
 
     def put(self, key: str, obj: Encoded) -> None:
-        # R2 can answer 503 "Reduce your concurrent request rate for the same object"
-        # under heavy parallel load (e.g. a client-side retry racing the original PUT).
-        # botocore retries first; this adds a slower backoff on top.
-        delay = 1.0
-        for attempt in range(6):
-            try:
-                return self._put_once(key, obj)
-            except self.client.exceptions.ClientError as e:
-                code = e.response.get("Error", {}).get("Code", "")
-                if code not in _RETRYABLE or attempt == 5:
-                    raise
-                logger.warning(
-                    "r2 put throttled; backing off",
-                    extra={"key": key, "code": code, "sleep": delay},
-                )
-                time.sleep(delay)
-                delay *= 2
+        """One PUT (botocore retries transient errors). Raises Throttled when R2 keeps
+        asking us to slow down; the caller backs off and lowers concurrency."""
+        try:
+            self._put_once(key, obj)
+        except self.client.exceptions.ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in _RETRYABLE:
+                raise Throttled(f"{code} on {key}") from e
+            raise
 
     def _put_once(self, key: str, obj: Encoded) -> None:
         extra: dict[str, Any] = {
@@ -288,16 +338,27 @@ class Publisher:
     def keys_with_prefix(self, prefix: str) -> list[str]:
         return sorted(k for k in self.manifest.objects if k.startswith(prefix))
 
+    def _put_retrying(self, key: str, obj: Encoded) -> None:
+        delay = 1.0
+        for attempt in range(PUT_ATTEMPTS):
+            try:
+                return self.store.put(key, obj)
+            except Throttled:
+                if attempt == PUT_ATTEMPTS - 1:
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
+
     def _save_shards(self) -> None:
         for sk in sorted(self._dirty_shards):
-            self.store.put(sk, self.encoder.encode(self._shards[sk]))
+            self._put_retrying(sk, self.encoder.encode(self._shards[sk]))
         self._dirty_shards.clear()
 
     def save(self) -> None:
         """Write dirty shards, then the main manifest (last)."""
         self._save_shards()
         self.manifest.updated_at = _now()
-        self.store.put(keys.MANIFEST_KEY, self.encoder.encode(self.manifest.to_json()))
+        self._put_retrying(keys.MANIFEST_KEY, self.encoder.encode(self.manifest.to_json()))
         self.dirty = False
 
     def season_unchanged(self, sport: str, season: int, fingerprints: dict[str, str]) -> bool:
@@ -381,8 +442,26 @@ class Publisher:
         if not items:
             return
 
+        limit = AdaptiveLimit(UPLOAD_WORKERS, UPLOAD_MIN_WORKERS)
+
         def put(item: tuple[str, Encoded]) -> None:
-            self.store.put(*item)
+            delay = 1.0
+            for attempt in range(PUT_ATTEMPTS):
+                limit.acquire()
+                try:
+                    self.store.put(*item)
+                except Throttled:
+                    limit.release(throttled=True)
+                    if attempt == PUT_ATTEMPTS - 1:
+                        raise
+                    time.sleep(delay)
+                    delay = min(delay * 2, 30.0)
+                    continue
+                except BaseException:
+                    limit.release()
+                    raise
+                limit.release()
+                return
 
         # Upload in chunks and checkpoint the hash shards after each one, so a failure
         # mid-backfill doesn't force the next run to re-upload what already landed.
@@ -403,5 +482,6 @@ class Publisher:
                         "done": i + len(chunk),
                         "total": len(items),
                         "secs": round(time.monotonic() - t0, 1),
+                        "concurrency": limit.limit,
                     },
                 )

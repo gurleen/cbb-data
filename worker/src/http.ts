@@ -52,8 +52,9 @@ export interface Entry {
   cacheStatus: "HIT" | "MISS";
 }
 
-function cacheKey(url: URL): Request {
-  return new Request(`https://cbb-cache.internal${url.pathname}`, { method: "GET" });
+/** Cache entries are keyed by R2 object key, so routes that share an object share it. */
+function cacheKey(objectKey: string): Request {
+  return new Request(`https://cbb-cache.internal/${objectKey}`, { method: "GET" });
 }
 
 /**
@@ -68,9 +69,8 @@ export async function loadEntry(
   ttl: keyof typeof TTL,
   ifNoneMatch: string | undefined,
 ): Promise<Entry | "not-modified" | null> {
-  const url = new URL(c.req.url);
   const cache = typeof caches !== "undefined" ? caches.default : undefined;
-  const ck = cacheKey(url);
+  const ck = cacheKey(key);
   const hit = cache ? await cache.match(ck) : undefined;
   if (hit) {
     const etag = hit.headers.get("ETag") ?? "";

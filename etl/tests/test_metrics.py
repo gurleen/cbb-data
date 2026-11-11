@@ -86,6 +86,7 @@ def test_documents(built):
         keys.conferences_key("mbb", 2026),
         keys.conference_key("mbb", 2026, 10),
         keys.search_key("mbb", 2026),
+        keys.team_ranks_key("mbb", 2026),
         *(keys.team_key("mbb", 2026, t) for t in (1, 2, 3)),
         *(keys.team_games_key("mbb", 2026, t) for t in (1, 2, 3)),
     }
@@ -100,13 +101,15 @@ def test_documents(built):
 
 def test_ranks_conferences_and_game_logs(built):
     docs = built.documents
-    beta = docs[keys.team_key("mbb", 2026, 2)]
-    alpha = docs[keys.team_key("mbb", 2026, 1)]
+    # ranks live in one per-season doc, not in team pages (so idle teams' pages don't churn)
+    assert "ranks" not in docs[keys.team_key("mbb", 2026, 2)]
+    rk = docs[keys.team_ranks_key("mbb", 2026)]
+    beta, alpha = rk["ranks"]["2"], rk["ranks"]["1"]
     # D-I field = Alpha + Beta (Gamma is not D-I). Beta has the better net rating.
-    assert beta["rank_field"] == 2
-    assert beta["ranks"]["net_rtg"] == 1 and alpha["ranks"]["net_rtg"] == 2
+    assert rk["field"] == 2 and "3" not in rk["ranks"]
+    assert beta["net_rtg"] == 1 and alpha["net_rtg"] == 2
     # DRtg: lower is better -> Alpha (85.6) ranks ahead of Beta (87.2)
-    assert alpha["ranks"]["drtg"] == 1 and beta["ranks"]["drtg"] == 2
+    assert alpha["drtg"] == 1 and beta["drtg"] == 2
     conf = docs[keys.conferences_key("mbb", 2026)]["conferences"][0]
     assert conf["id"] == 10 and conf["teams"] == 2
     assert (conf["nonconf_wins"], conf["nonconf_losses"]) == (0, 0)  # Gamma isn't D-I

@@ -21,6 +21,9 @@ const KEYS = {
   teams: (sport: string, season: string) => `v1/${sport}/${season}/teams.json`,
   team: (sport: string, season: string, id: string) => `v1/${sport}/${season}/teams/${id}.json`,
   teamStats: (sport: string, season: string) => `v1/${sport}/${season}/team-stats.json`,
+  teamRanks: (sport: string, season: string) => `v1/${sport}/${season}/ranks/teams.json`,
+  player: (sport: string, season: string, id: string) => `v1/${sport}/${season}/players/${id}.json`,
+  playerRanks: (sport: string, season: string) => `v1/${sport}/${season}/ranks/players.json`,
 };
 
 function ttlFor(season: string | null): "current" | "past" {
@@ -57,12 +60,83 @@ v1.get("/:sport/:season/teams", async (c) => {
   return serve(c, KEYS.teams(sport, season), season, `season ${season}`);
 });
 
+// -- rank merging -------------------------------------------------------------------------
+// D-I ranks shift for every team/player whenever anyone plays, so the ETL keeps them in one
+// per-season document (ranks/teams.json, ranks/players.json) instead of inside each page;
+// otherwise every page would be rewritten to R2 daily. These routes merge them back so the
+// response shape is unchanged. Seasons published before the split have no ranks document
+// (their pages still embed ranks) and are served as-is.
+
+interface RanksDoc {
+  field: number;
+  ranks: Record<string, Record<string, number>>;
+}
+
+const parsedRanks = new Map<string, RanksDoc>(); // etag -> parsed doc (per isolate)
+
+async function ranksFor(entry: Entry): Promise<RanksDoc> {
+  const hit = parsedRanks.get(entry.etag);
+  if (hit) return hit;
+  const doc = await decodeJson<RanksDoc>(entry);
+  if (parsedRanks.size >= 8) parsedRanks.delete(parsedRanks.keys().next().value as string);
+  parsedRanks.set(entry.etag, doc);
+  return doc;
+}
+
+async function serveWithRanks(
+  c: Context<AppEnv>,
+  docKey: string,
+  ranksKey: string,
+  id: string,
+  season: string,
+  fieldName: "rank_field" | "field",
+  what: string,
+) {
+  const ttl = ttlFor(season);
+  const [doc, ranks] = await Promise.all([
+    loadEntry(c, docKey, ttl, undefined),
+    loadEntry(c, ranksKey, ttl, undefined),
+  ]);
+  if (doc === null) return jsonError(c, 404, `${what} not found`);
+  if (doc === "not-modified" || ranks === "not-modified") throw new Error("unreachable");
+  if (ranks === null) {
+    if (etagMatches(c.req.header("If-None-Match"), doc.etag)) {
+      c.header("ETag", doc.etag);
+      return notModified(c, ttl);
+    }
+    return respondWithEntry(c, doc, ttl);
+  }
+
+  const etag = `W/"${stripQuotes(doc.etag)}.${stripQuotes(ranks.etag)}"`;
+  if (etagMatches(c.req.header("If-None-Match"), etag)) {
+    c.header("ETag", etag);
+    return notModified(c, ttl);
+  }
+  const [body, rk] = await Promise.all([decodeJson<Record<string, unknown>>(doc), ranksFor(ranks)]);
+  const newer = Date.parse(doc.lastModified) >= Date.parse(ranks.lastModified) ? doc : ranks;
+  return c.json({ ...body, ranks: rk.ranks[id] ?? {}, [fieldName]: rk.field }, 200, {
+    "Cache-Control": cacheControl(ttl),
+    ETag: etag,
+    "Last-Modified": newer.lastModified,
+    Vary: "Accept-Encoding",
+    "X-Cache": doc.cacheStatus === "HIT" && ranks.cacheStatus === "HIT" ? "HIT" : "MISS",
+  });
+}
+
 v1.get("/:sport/:season/teams/:teamId", async (c) => {
   const bad = checkParams(c);
   if (bad) return bad;
   const { sport, season, teamId } = c.req.param();
   if (!/^\d{1,10}$/.test(teamId)) return jsonError(c, 400, "teamId must be numeric");
-  return serve(c, KEYS.team(sport, season, teamId), season, `team ${teamId} in ${season}`);
+  return serveWithRanks(
+    c,
+    KEYS.team(sport, season, teamId),
+    KEYS.teamRanks(sport, season),
+    teamId,
+    season,
+    "rank_field",
+    `team ${teamId} in ${season}`,
+  );
 });
 
 // -- simple passthrough routes (precomputed objects) ----------------------------------------
@@ -94,7 +168,21 @@ seasonObject(
 );
 seasonObject("/:sport/:season/players", () => "players.json", "players");
 seasonObject("/:sport/:season/players-all", () => "players-all.json", "players");
-seasonObject("/:sport/:season/players/:playerId", (p) => `players/${p.playerId}.json`, "player");
+v1.get("/:sport/:season/players/:playerId", async (c) => {
+  const bad = checkParams(c);
+  if (bad) return bad;
+  const { sport, season, playerId } = c.req.param();
+  if (!ID.test(playerId)) return jsonError(c, 400, "playerId must be numeric");
+  return serveWithRanks(
+    c,
+    KEYS.player(sport, season, playerId),
+    KEYS.playerRanks(sport, season),
+    playerId,
+    season,
+    "field",
+    "player",
+  );
+});
 seasonObject("/:sport/:season/search", () => "search.json", "search index");
 
 // Season-independent player career.

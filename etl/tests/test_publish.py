@@ -149,3 +149,46 @@ def test_failed_upload_keeps_checkpointed_hashes(tmp_path, fixture_paths, monkey
     # objects from completed chunks were checkpointed and are skipped on the retry
     assert s.skipped > 0
     assert s.uploaded + s.skipped == len(b.documents) + 1  # + seasons.json
+
+
+def test_adaptive_limit_backs_off_and_recovers():
+    from cbb_etl.load_r2 import AdaptiveLimit
+
+    lim = AdaptiveLimit(48, low=4, grow_after=2, cooldown=0)
+    for _ in range(5):
+        lim.acquire()
+        lim.release(throttled=True)
+    assert lim.limit == 4  # 48 -> 24 -> 12 -> 6 -> 4 (floor)
+    for _ in range(6):
+        lim.acquire()
+        lim.release()
+    assert lim.limit == 7  # +1 per 2 clean uploads
+
+    burst = AdaptiveLimit(48, low=4, cooldown=60)
+    for _ in range(10):  # many in-flight failures at once count as one cut
+        burst.acquire()
+    for _ in range(10):
+        burst.release(throttled=True)
+    assert burst.limit == 24 and burst.throttles == 10
+
+
+def test_throttled_uploads_are_retried(tmp_path, fixture_paths, monkeypatch):
+    import cbb_etl.load_r2 as lr
+
+    monkeypatch.setattr(lr.time, "sleep", lambda s: None)
+    store = LocalStore(tmp_path / "out")
+    real_put = store.put
+    seen: dict[str, int] = {}
+
+    def throttling(key, obj):
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] <= 2:  # every object (and shard/manifest write) is throttled twice
+            raise lr.Throttled(key)
+        real_put(key, obj)
+
+    monkeypatch.setattr(store, "put", throttling)
+    b = _build(fixture_paths)
+    s = Publisher(store).publish([b], {("mbb", 2026): {"x": "1"}}, {})
+    assert s.uploaded == len(b.documents) + 1
+    assert (tmp_path / "out" / keys.team_key("mbb", 2026, 1)).exists()
+    assert Manifest.load(store).sources["mbb/2026"] == {"x": "1"}

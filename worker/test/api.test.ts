@@ -157,7 +157,7 @@ describe("serving precomputed objects", () => {
 
   it("second request is served from the Cache API", async () => {
     const path = `/v1/mbb/${PAST}/teams/1`;
-    const urlKey = new Request(`https://cbb-cache.internal${path}`);
+    const urlKey = new Request(`https://cbb-cache.internal/v1/mbb/${PAST}/teams/1.json`);
     await caches.default.delete(urlKey);
     const first = await get(path, { "Accept-Encoding": "gzip" });
     expect(first.headers.get("X-Cache")).toBe("MISS");
@@ -187,6 +187,52 @@ describe("serving precomputed objects", () => {
     );
     expect(pre.status).toBe(204);
     expect(pre.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+  });
+});
+
+describe("rank merging", () => {
+  beforeEach(async () => {
+    await put(`v1/mbb/${CUR}/ranks/teams.json`, { field: 364, ranks: { "1": { ppg: 3 } } });
+    await put(`v1/mbb/${CUR}/players/7.json`, { player: { player_id: 7 } });
+    await put(`v1/mbb/${CUR}/ranks/players.json`, { field: 2300, ranks: { "7": { ppg: 1 } } });
+  });
+
+  it("merges team ranks into the team page", async () => {
+    const res = await get(`/v1/mbb/${CUR}/teams/1`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      season: CUR,
+      team: { id: 1, name: "Alpha" },
+      ranks: { ppg: 3 },
+      rank_field: 364,
+    });
+  });
+
+  it("merges player ranks; unranked ids get {}", async () => {
+    const res = await get(`/v1/mbb/${CUR}/players/7`);
+    expect(await res.json()).toEqual({ player: { player_id: 7 }, ranks: { ppg: 1 }, field: 2300 });
+    await put(`v1/mbb/${CUR}/players/8.json`, { player: { player_id: 8 } });
+    const other = await get(`/v1/mbb/${CUR}/players/8`);
+    expect(await other.json()).toMatchObject({ ranks: {}, field: 2300 });
+  });
+
+  it("combined weak ETag supports 304", async () => {
+    const first = await get(`/v1/mbb/${CUR}/teams/1`);
+    const etag = first.headers.get("ETag")!;
+    expect(etag).toMatch(/^W\/"[^"]+\.[^"]+"$/);
+    await first.arrayBuffer();
+    const second = await get(`/v1/mbb/${CUR}/teams/1`, { "If-None-Match": etag });
+    expect(second.status).toBe(304);
+  });
+
+  it("seasons without a ranks document are served as stored", async () => {
+    const res = await get(`/v1/mbb/${PAST}/teams/1`);
+    expect(await res.json()).toEqual({ season: PAST, team: { id: 1, name: "Alpha" } });
+    expect(res.headers.get("ETag")).toMatch(/^"/);
+  });
+
+  it("404s when the page is missing even if ranks exist", async () => {
+    expect((await get(`/v1/mbb/${CUR}/teams/99`)).status).toBe(404);
   });
 });
 

@@ -188,8 +188,6 @@ def _team_doc(
     season: int,
     t: dict,
     s: dict | None,
-    ranks: dict | None = None,
-    field: int = 0,
     roster: list | None = None,
 ) -> dict[str, Any]:
     doc: dict[str, Any] = {
@@ -197,8 +195,7 @@ def _team_doc(
         "season": season,
         "season_label": season_label(season),
         "team": _team_meta(t),
-        "ranks": ranks or {},
-        "rank_field": field,
+        # ranks + rank_field live in ranks/teams.json (see keys.team_ranks_key)
         "roster": roster or [],
     }
     if s is None:  # team appears only in unfinished/canceled games
@@ -319,6 +316,10 @@ def build_documents(
     docs: dict[str, Any] = {}
     label = season_label(season)
     ranks, field = d.team_ranks(teams, stats)
+    # Ranks shift for every team whenever anyone plays, so they're kept in one document
+    # instead of inside each team page; that way a team page only changes (and is only
+    # re-uploaded) on days the team itself plays. The API merges them back.
+    docs[keys.team_ranks_key(sport, season)] = d.ranks_doc(sport, season, field, ranks)
 
     rosters: dict[int, list] = {}
     players: list[dict] = []
@@ -358,8 +359,6 @@ def build_documents(
             season,
             t,
             stats.get(t["team_id"]),
-            ranks.get(t["team_id"]),
-            field,
             rosters.get(t["team_id"]),
         )
     board = [

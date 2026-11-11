@@ -80,6 +80,16 @@ def player_key(sport: str, season: int, player_id: int) -> str:
     return f"{season_prefix(sport, season)}players/{int(player_id)}.json"
 
 
+def team_ranks_key(sport: str, season: int) -> str:
+    """D-I ranks for every team (merged into team responses by the API)."""
+    return f"{season_prefix(sport, season)}ranks/teams.json"
+
+
+def player_ranks_key(sport: str, season: int) -> str:
+    """D-I ranks for every qualified player (merged into player responses by the API)."""
+    return f"{season_prefix(sport, season)}ranks/players.json"
+
+
 def search_key(sport: str, season: int) -> str:
     return f"{season_prefix(sport, season)}search.json"
 

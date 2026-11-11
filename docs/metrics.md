@@ -94,7 +94,8 @@ Game 102 possessions: Beta `62 - 12 + 10 + 0.475*12 = 65.7`, Gamma `55 - 9 + 16 
 
 ## D-I ranks
 
-Team pages carry `ranks` (and `rank_field`, the field size) for win %, ratings, pace,
+Team pages carry `ranks` (and `rank_field`, the field size; stored in
+`ranks/teams.json` and merged in by the API) for win %, ratings, pace,
 scoring, shooting and per-game stats. Ranks cover D-I teams with at least one box game,
 use competition ranking (1, 2, 2, 4), and are reversed for stats where lower is better
 (DRtg, opponent PPG, opponent FG%/3P%, turnovers).

@@ -320,6 +320,16 @@ def _player_ident(p: Row, team: Row | None) -> Row:
     }
 
 
+def ranks_doc(sport: str, season: int, field: int, ranks: dict[int, dict]) -> Row:
+    """All ranks for a season in one document, keyed by id (as a string, for JSON)."""
+    return {
+        "sport": sport,
+        "season": season,
+        "field": field,
+        "ranks": {str(k): v for k, v in sorted(ranks.items()) if v},
+    }
+
+
 def player_docs(
     sport: str,
     season: int,
@@ -452,10 +462,9 @@ def player_docs(
                 "teams_played_for": p["teams_played_for"],
             },
             "qualified": bool(p["qualified"]),
-            "field": len(qualified),
+            # field + ranks live in ranks/players.json (see keys.player_ranks_key)
             "line": _player_line(p),
             "totals": totals,
-            "ranks": ranks.get(p["athlete_id"], {}),
             "games": log,
         }
         rosters[p["team_id"]].append(
@@ -481,6 +490,7 @@ def player_docs(
         )
     for r in rosters.values():
         r.sort(key=lambda x: -(x["mpg"] or 0))
+    docs[keys.player_ranks_key(sport, season)] = ranks_doc(sport, season, len(qualified), ranks)
     return docs, rosters
 
 
