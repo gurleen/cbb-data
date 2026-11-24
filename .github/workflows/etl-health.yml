@@ -1,0 +1,101 @@
+name: etl-health
+
+# Opens (or comments on) one "ETL alert" issue, assigned to the repo owner so GitHub
+# notifies them, when:
+#   - an etl run fails, or
+#   - in season (Oct-Apr), no etl run has succeeded in the last 36 hours (catches
+#     scheduled runs that GitHub delays or never fires).
+# The issue is closed automatically by the next successful etl run.
+
+on:
+  workflow_run:
+    workflows: [etl]
+    types: [completed]
+  schedule:
+    # 22:23 UTC, after the 09:00 UTC etl run even when GitHub delays it by hours.
+    - cron: "23 22 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  actions: read
+
+concurrency:
+  group: etl-health
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  LABEL: etl-alert
+  TITLE: ETL alert
+  ASSIGNEE: ${{ github.repository_owner }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          set -euo pipefail
+          action=none; body=""
+          if [ "$EVENT" = "workflow_run" ]; then
+            case "$CONCLUSION" in
+              success) action=close; body="Recovered: [etl run]($RUN_URL) succeeded." ;;
+              failure|timed_out|startup_failure)
+                action=alert
+                body="The [etl run]($RUN_URL) (${RUN_EVENT}) ended with **${CONCLUSION}**. The site's data may be stale until a run succeeds." ;;
+            esac
+          else
+            month=$(date -u +%-m)
+            if [ "$month" -ge 5 ] && [ "$month" -le 9 ]; then
+              echo "Off-season; skipping staleness check."
+            else
+              last=$(gh run list --workflow etl.yml --status success --limit 1 \
+                       --json createdAt,url --jq '.[0] | "\(.createdAt) \(.url)"' || true)
+              if [ -z "$last" ]; then
+                action=alert; body="No successful etl run found."
+              else
+                ts=${last%% *}; url=${last#* }
+                age_h=$(( ( $(date -u +%s) - $(date -u -d "$ts" +%s) ) / 3600 ))
+                echo "Last successful etl run: $ts (${age_h}h ago)"
+                if [ "$age_h" -ge 36 ]; then
+                  action=alert
+                  body="No etl run has succeeded in **${age_h} hours** (last: [$ts]($url)). Scheduled runs may be failing or not firing; check the Actions tab."
+                fi
+              fi
+            fi
+          fi
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          { echo "body<<EOF"; echo "$body"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the alert issue
+        if: steps.decide.outputs.action == 'alert'
+        env:
+          BODY: ${{ steps.decide.outputs.body }}
+        run: |
+          set -euo pipefail
+          gh label create "$LABEL" --color B60205 --description "Automated ETL health alert" 2>/dev/null || true
+          num=$(gh issue list --label "$LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label "$LABEL" --assignee "$ASSIGNEE" \
+              --body "$BODY"$'\n\n'"This issue closes itself when the next etl run succeeds."
+          fi
+
+      - name: Close the alert issue
+        if: steps.decide.outputs.action == 'close'
+        env:
+          BODY: ${{ steps.decide.outputs.body }}
+        run: |
+          set -euo pipefail
+          for num in $(gh issue list --label "$LABEL" --state open --json number --jq '.[].number'); do
+            gh issue close "$num" --comment "$BODY"
+          done
