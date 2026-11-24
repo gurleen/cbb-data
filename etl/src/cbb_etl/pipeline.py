@@ -87,14 +87,19 @@ def run(opts: RunOptions, settings: Settings | None = None) -> int:
     if want_r2 or want_lake:
         store = LocalStore(opts.out_dir) if opts.dry_run else R2Store(settings.require_r2())
         publisher = Publisher(store, dry_run_label="local" if opts.dry_run else "r2")
-    loader: MotherDuckLoader | None = None
-    if want_md:
-        loader = MotherDuckLoader(
+
+    def connect_md() -> MotherDuckLoader:
+        return MotherDuckLoader(
             database=settings.motherduck_database,
             token=None if opts.dry_run else settings.require_motherduck(),
             local_path=opts.out_dir / "cbb.duckdb" if opts.dry_run else None,
             storage_limit_gb=opts.md_storage_limit_gb,
         )
+
+    # Views mode only needs MotherDuck at the very end, so connect then: a MotherDuck
+    # outage (or an expired plan) must not stop the R2 data the site serves. Tables mode
+    # reads load fingerprints up front, so it still connects first.
+    loader: MotherDuckLoader | None = connect_md() if md_tables else None
 
     table_datasets = list(LAKE_DATASETS) + (["pbp"] if opts.include_pbp else [])
     builds: dict[tuple[str, int], SeasonBuild] = {}
@@ -199,8 +204,13 @@ def run(opts: RunOptions, settings: Settings | None = None) -> int:
         )
         logger.info("lake size", extra={"r2_parquet_gb": round(lake_bytes / GB, 3)})
 
-    # 4. MotherDuck
-    if loader:
+    # 4. MotherDuck (last; a failure here leaves the R2 publish intact but fails the run)
+    if want_md:
+        try:
+            loader = loader or connect_md()
+        except Exception:
+            logger.exception("motherduck unavailable; R2 data was published, views not refreshed")
+            return 1
         try:
             if md_views:
                 _refresh_views(loader, publisher, settings, opts)

@@ -192,3 +192,42 @@ def test_throttled_uploads_are_retried(tmp_path, fixture_paths, monkeypatch):
     assert s.uploaded == len(b.documents) + 1
     assert (tmp_path / "out" / keys.team_key("mbb", 2026, 1)).exists()
     assert Manifest.load(store).sources["mbb/2026"] == {"x": "1"}
+
+
+def test_motherduck_failure_still_publishes_r2(tmp_path, fixture_paths, monkeypatch):
+    """An expired/unavailable MotherDuck must not block the site's R2 data."""
+    import cbb_etl.pipeline as pl
+    from cbb_etl.config import Settings
+
+    class FakeAsset:
+        def __init__(self, path):
+            self.path, self.fingerprint = path, f"fp-{path.name}"
+
+    class FakeClient:
+        def __init__(self, *a, **k): ...
+        def timestamp(self, tag):
+            return "ts"  # noqa: E704
+
+        def fetch(self, asset):
+            return asset.path  # noqa: E704
+
+    def boom(**kwargs):
+        raise RuntimeError("Your MotherDuck trial has ended")
+
+    monkeypatch.setattr(pl, "ReleaseClient", FakeClient)
+    monkeypatch.setattr(
+        pl, "_resolve", lambda c, sp, ds, s: FakeAsset(p) if (p := fixture_paths.get(ds)) else None
+    )
+    monkeypatch.setattr(pl, "parse_seasons", lambda spec, first: [2026])
+    monkeypatch.setattr(pl, "current_season", lambda: 2026)
+    monkeypatch.setattr(pl, "MotherDuckLoader", boom)
+    monkeypatch.setattr(
+        pl, "build_season", lambda sp, s, paths: build_season(sp, s, paths, min_division_i=2)
+    )
+
+    out = tmp_path / "out"
+    opts = pl.RunOptions(sports=("mbb",), dry_run=True, out_dir=out)
+    settings = Settings.from_env({"CBB_CACHE_DIR": str(tmp_path / "cache" / "sdv")})
+    assert pl.run(opts, settings) == 1  # failure is still reported...
+    assert (out / keys.team_key("mbb", 2026, 1)).exists()  # ...after R2 was published
+    assert Manifest.load(LocalStore(out)).sources["mbb/2026"]
